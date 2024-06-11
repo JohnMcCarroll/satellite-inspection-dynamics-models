@@ -60,7 +60,7 @@ if __name__ == "__main__":
                     i += 1
                     j = i + 1
 
-    # Calculate the mean and standard deviation for each key
+    # Calculate the mean and standard deviation
     means = []
     std_devs = []
 
@@ -72,6 +72,7 @@ if __name__ == "__main__":
         std_devs.append(np.std(error_by_steps[i]))
         steps.append(i)
 
+    # Create plots
     plt.plot(steps, means, label="Error")
     lower_bounds = np.subtract(means, std_devs)
     upper_bounds = np.add(means, std_devs)
@@ -82,7 +83,7 @@ if __name__ == "__main__":
     plt.title("Prediction Error by Steps")
     plt.legend()
 
-    # Save the plot to a file
+    # Save the plot
     plot_filename = 'error_by_steps.png'
     plt.savefig(plot_filename)
     print(f"Plot saved to {plot_filename}")
@@ -102,7 +103,7 @@ if __name__ == "__main__":
     plt.title("Prediction Error by Steps")
     plt.legend()
 
-    # Save the plot to a file
+    # Save the plot
     plot_filename = 'error_by_steps_20.png'
     plt.savefig(plot_filename)
     print(f"Plot saved to {plot_filename}")
@@ -123,16 +124,14 @@ if __name__ == "__main__":
     plt.legend()
 
 
-    # Save the plot to a file
+    # Save the plot
     plot_filename = 'error_by_steps_10.png'
     plt.savefig(plot_filename)
     print(f"Plot saved to {plot_filename}")
 
-    # Save the initial dictionary to a pickle file
     dict_filename = 'error_by_steps.pkl'
     with open(dict_filename, 'wb') as f:
         pickle.dump(error_by_steps, f)
     print(f"Dictionary saved to {dict_filename}")
 
-    # Optionally, show the plot
     plt.show()
