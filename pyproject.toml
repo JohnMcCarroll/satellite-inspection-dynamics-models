@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "satellite-inspection-dynamics-models"
+version = "0.1.0"
+description = "A repo focused on the study of MBRL dynamics models for a satellite inspection environment."
+authors = ["John McCarroll <john.mccarroll.ext@afresearchlab.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+corl = "3.16.2"
+safe-autonomy-sims = "4.0.1"
+setuptools = "<70.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
