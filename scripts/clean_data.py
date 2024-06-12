@@ -96,6 +96,11 @@ for i in range(dataset.shape[0]):
     dataset['Trajectory'][i] = new_traj
 
 
-dataset.to_pickle('../random_dataset3.pkl')
-dataset.to_pickle('../random_dataset4.pkl')
+split_index = len(dataset) // 2
+df1 = dataset.iloc[:split_index].copy()
+df2 = dataset.iloc[split_index:].copy()
+
+
+df1.to_pickle('random_dataset3.pkl')
+df2.to_pickle('random_dataset4.pkl')
 
