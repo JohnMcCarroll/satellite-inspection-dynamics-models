@@ -78,33 +78,17 @@ def load_dataset():
 
 def load_test_dataset():
     # Load in DataFrames from file
-    ppo1_path = os.path.join(os.path.dirname(__file__), "../data/ppo_dataset1.pkl")
-    ppo2_path = os.path.join(os.path.dirname(__file__), "../data/ppo_dataset2.pkl")
-    random_path = os.path.join(os.path.dirname(__file__), "../data/random_dataset.pkl")
+    test_path = os.path.join(os.path.dirname(__file__), "../data/test_dataset.pkl")
 
-    with open(ppo1_path, 'rb') as file:
-        ppo1_data = pickle.load(file)
-
-    with open(ppo2_path, 'rb') as file:
-        ppo2_data = pickle.load(file)
-
-    with open(random_path, 'rb') as file:
-        random_data = pickle.load(file)
+    with open(test_path, 'rb') as file:
+        test_data = pickle.load(file)
 
     # Parse data
     data_dict = {
         "Trajectory": [],
     }
 
-    for row in ppo1_data["Trajectory"]:
-        traj = [np.concatenate((mdp[0],mdp[1])) for mdp in row]
-        data_dict['Trajectory'].append(traj)
-
-    for row in ppo2_data["Trajectory"]:
-        traj = [np.concatenate((mdp[0],mdp[1])) for mdp in row]
-        data_dict['Trajectory'].append(traj)
-
-    for row in random_data["Trajectory"]:
+    for row in test_data["Trajectory"]:
         traj = [np.concatenate((mdp[0],mdp[1])) for mdp in row]
         data_dict['Trajectory'].append(traj)
 

@@ -25,9 +25,9 @@ class DataFrameDataset(Dataset):
 class MLP(nn.Module):
     def __init__(self, input_size, output_size):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, output_size)
+        self.fc1 = nn.Linear(input_size, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, output_size)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Training loop
-    num_epochs = 50
+    num_epochs = 100
     for epoch in range(num_epochs):
         for inputs, targets in dataloader:
             # Zero the parameter gradients
@@ -72,5 +72,5 @@ if __name__ == "__main__":
     print("Training completed.")
 
     # Save the trained model
-    model_path = 'models/linear_model.pth'
+    model_path = 'models/linear_model_256.pth'
     torch.save(model.state_dict(), model_path)
