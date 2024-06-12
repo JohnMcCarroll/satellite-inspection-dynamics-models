@@ -12,7 +12,9 @@ def load_dataset():
     # Load in DataFrames from file
     ppo1_path = os.path.join(os.path.dirname(__file__), "../data/ppo_dataset1.pkl")
     ppo2_path = os.path.join(os.path.dirname(__file__), "../data/ppo_dataset2.pkl")
-    random_path = os.path.join(os.path.dirname(__file__), "../data/random_dataset.pkl")
+    random1_path = os.path.join(os.path.dirname(__file__), "../data/random_dataset.pkl")
+    random2_path = os.path.join(os.path.dirname(__file__), "../data/random_dataset4.pkl")
+    random3_path = os.path.join(os.path.dirname(__file__), "../data/random_dataset3.pkl")
 
     with open(ppo1_path, 'rb') as file:
         ppo1_data = pickle.load(file)
@@ -20,8 +22,14 @@ def load_dataset():
     with open(ppo2_path, 'rb') as file:
         ppo2_data = pickle.load(file)
 
-    with open(random_path, 'rb') as file:
-        random_data = pickle.load(file)
+    with open(random1_path, 'rb') as file:
+        random1_data = pickle.load(file)
+
+    with open(random2_path, 'rb') as file:
+        random2_data = pickle.load(file)
+
+    with open(random3_path, 'rb') as file:
+        random3_data = pickle.load(file)
 
     # Parse data
     data_dict = {
@@ -45,7 +53,21 @@ def load_dataset():
                 data_dict['s*'].append(row[i+1][0])
                 num_ppo_data += 1
 
-    for row in random_data["Trajectory"]:
+    for row in random1_data["Trajectory"]:
+        for i in range(len(row)):
+            if not row[i] is row[-1]:
+                data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
+                data_dict['s*'].append(row[i+1][0])
+                num_random_data += 1
+
+    for row in random2_data["Trajectory"]:
+        for i in range(len(row)):
+            if not row[i] is row[-1]:
+                data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
+                data_dict['s*'].append(row[i+1][0])
+                num_random_data += 1
+
+    for row in random3_data["Trajectory"]:
         for i in range(len(row)):
             if not row[i] is row[-1]:
                 data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
