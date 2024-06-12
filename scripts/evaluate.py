@@ -16,7 +16,7 @@ def euclidean_distance(output, target):
 
 if __name__ == "__main__":
     # Load the trained model
-    model_path = 'models/linear_model.pth'
+    model_path = 'models/linear_model_256.pth'
     input_size = 14
     output_size = 11
 
@@ -30,35 +30,75 @@ if __name__ == "__main__":
     # Evaluate the model
     error_by_steps = {}
 
+    # with torch.no_grad():
+    #     for trajectory in test_df['Trajectory']:
+    #         # Parse input-output pairs from trajectory
+    #         i = 0
+    #         j = 1
+    #         while i < len(trajectory) - 1:
+    #             state_action = torch.tensor(trajectory[i], dtype=torch.float32)
+    #             target_state = trajectory[j][0:11]
+    #             actions = [state_action[-3:] for state_action in trajectory[i+1:j]]
+    #             n = j - i
+    #             for k in range(n):
+    #                 # Use the model to predict n steps into the future
+    #                 # Where n is the number of timesteps between the input and target output in the trajectory
+    #                 predicted_state = model(state_action)
+    #                 # Concatentate model's predicted state with next taken action
+    #                 if k < n - 1:
+    #                     state_action = torch.tensor(np.concatenate((predicted_state,actions[k])), dtype=torch.float32)
+    #             output = predicted_state.numpy()
+    #             dist = euclidean_distance(output, target_state)
+    #             if n in error_by_steps:
+    #                 error_by_steps[n].append(dist)
+    #             else:
+    #                 error_by_steps[n] = [dist]
+    #             # Increment input-output pair along trajectory
+    #             if j < len(trajectory) - 1:
+    #                 j += 1
+    #             else:
+    #                 i += 1
+    #                 j = i + 1
+
+    # TODO: remove redundant calculation of multistep predictions
     with torch.no_grad():
         for trajectory in test_df['Trajectory']:
-            # Parse input-output pairs from trajectory
+            # Create multistep predictions for each trajectory in test dataset
             i = 0
-            j = 1
-            while i < len(trajectory) - 1:
+            final_state_index = len(trajectory)-1
+            multistep_predictions = {}
+            target_states = {}
+            # final_state = trajectory[final_state_index][0:11]
+            while i < final_state_index:
+                # predicted_trajectory = []
                 state_action = torch.tensor(trajectory[i], dtype=torch.float32)
-                target_state = trajectory[j][0:11]
-                actions = [state_action[-3:] for state_action in trajectory[i+1:j]]
-                n = j - i
+                future_actions = [state_action[-3:] for state_action in trajectory[i+1:final_state_index]]
+
+                n = final_state_index - i
                 for k in range(n):
+                    if k > 49:
+                        # Model error compounds exponentially, don't waste compute on long range
+                        break
                     # Use the model to predict n steps into the future
                     # Where n is the number of timesteps between the input and target output in the trajectory
                     predicted_state = model(state_action)
+                    # store model's prediction and ground truth target state
+                    multistep_predictions[(i,i+k+1)] = predicted_state
+                    target_states[(i,i+k+1)] = trajectory[i+k+1][0:11]
+
                     # Concatentate model's predicted state with next taken action
                     if k < n - 1:
-                        state_action = torch.tensor(np.concatenate((predicted_state,actions[k])), dtype=torch.float32)
-                output = predicted_state.numpy()
-                dist = euclidean_distance(output, target_state)
-                if n in error_by_steps:
-                    error_by_steps[n].append(dist)
+                        state_action = torch.tensor(np.concatenate((predicted_state,future_actions[k])), dtype=torch.float32)
+                i += 1
+            for k,v in multistep_predictions.items():
+                num_steps = k[1]-k[0]
+                output = v.numpy()
+                dist = euclidean_distance(output, target_states[k])
+                if num_steps in error_by_steps:
+                    error_by_steps[num_steps].append(dist)
                 else:
-                    error_by_steps[n] = [dist]
-                # Increment input-output pair along trajectory
-                if j < len(trajectory) - 1:
-                    j += 1
-                else:
-                    i += 1
-                    j = i + 1
+                    error_by_steps[num_steps] = [dist]
+
 
     # Calculate the mean and standard deviation
     means = []
@@ -90,9 +130,9 @@ if __name__ == "__main__":
 
     # plot 20 timesteps
     plt.clf()
-    first_20_steps = steps[0:21]
-    first_20_means = means[0:21]
-    first_20_std_devs = std_devs[0:21]
+    first_20_steps = steps[0:20]
+    first_20_means = means[0:20]
+    first_20_std_devs = std_devs[0:20]
     plt.plot(first_20_steps, first_20_means, label="Error")
     lower_bounds = np.subtract(first_20_means, first_20_std_devs)
     upper_bounds = np.add(first_20_means, first_20_std_devs)
@@ -110,9 +150,9 @@ if __name__ == "__main__":
 
     # plot 10 timesteps
     plt.clf()
-    first_10_steps = steps[0:11]
-    first_10_means = means[0:11]
-    first_10_std_devs = std_devs[0:11]
+    first_10_steps = steps[0:10]
+    first_10_means = means[0:10]
+    first_10_std_devs = std_devs[0:10]
     plt.plot(first_10_steps, first_10_means, label="Error")
     lower_bounds = np.subtract(first_10_means, first_10_std_devs)
     upper_bounds = np.add(first_10_means, first_10_std_devs)
@@ -129,9 +169,35 @@ if __name__ == "__main__":
     plt.savefig(plot_filename)
     print(f"Plot saved to {plot_filename}")
 
+    # plot 5 timesteps
+    plt.clf()
+    first_5_steps = steps[0:5]
+    first_5_means = means[0:5]
+    first_5_std_devs = std_devs[0:5]
+    plt.plot(first_5_steps, first_5_means, label="Error")
+    lower_bounds = np.subtract(first_5_means, first_5_std_devs)
+    upper_bounds = np.add(first_5_means, first_5_std_devs)
+    plt.fill_between(first_5_steps, lower_bounds, upper_bounds, alpha=0.3)
+
+    plt.xlabel("Steps")
+    plt.ylabel("Prediction Error")
+    plt.title("Prediction Error by Steps")
+    plt.legend()
+
+
+    # Save the plot
+    plot_filename = 'error_by_steps_5.png'
+    plt.savefig(plot_filename)
+    print(f"Plot saved to {plot_filename}")
+
     dict_filename = 'error_by_steps.pkl'
     with open(dict_filename, 'wb') as f:
         pickle.dump(error_by_steps, f)
     print(f"Dictionary saved to {dict_filename}")
 
-    plt.show()
+    # calculate single step error
+    avg_error = means[0]
+    std_error = std_devs[0]
+    print("Single Step Error Mean and Std")
+    print(avg_error)
+    print(std_error)
