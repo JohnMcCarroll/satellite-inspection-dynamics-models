@@ -21,19 +21,20 @@ def load_df_from_file(file_path):
 
 
 # Load Dataframes
-file_path1 = "/tmp/MBRL/eval_data_df.pkl"
-file_path2 = "/tmp/MBRL/random_data.pkl"
-policy_df = load_df_from_file(file_path1)
+# file_path1 = "/tmp/MBRL/eval_data_df.pkl"
+file_path2 = "../random_dataset2.pkl"
+# policy_df = load_df_from_file(file_path1)
 random_df = load_df_from_file(file_path2)
 
 
 # Remove extra columns + add labels
-policy_df['Policy'] = "PPO"
+# policy_df['Policy'] = "PPO"
 random_df['Policy'] = "Random"
-policy_df = policy_df[['Trajectory', 'Policy']]
+# policy_df = policy_df[['Trajectory', 'Policy']]
 
 # Combine random and policy datasets
-dataset = pd.concat([policy_df, random_df], ignore_index=True)
+# dataset = pd.concat([policy_df, random_df], ignore_index=True)
+dataset = random_df
 
 # Parse action and observation dicts
 for i in range(dataset.shape[0]):
@@ -95,5 +96,6 @@ for i in range(dataset.shape[0]):
     dataset['Trajectory'][i] = new_traj
 
 
-dataset.to_pickle('/tmp/MBRL/trajectory_dataset.pkl')
+dataset.to_pickle('../random_dataset3.pkl')
+dataset.to_pickle('../random_dataset4.pkl')
 

@@ -57,7 +57,8 @@ def sample_nested_action_space(action_space):
 checkpoint_paths = [
     "/tmp/safe-autonomy-sims/output/tune/TRANSLATIONAL-INSPECTION/TRANSLATIONAL-INSPECTION-PPO_CorlMultiAgentEnv_8f57d_00000_0_2024-05-14_15-24-19/checkpoint_000011",
 ]
-expr_config = "/home/john/AFRL/dle/safe-autonomy-sims/configs/translational-inspection-no-rejection-sampler/experiment.yml"
+# expr_config = "/home/john/AFRL/dle/safe-autonomy-sims/configs/translational-inspection-no-rejection-sampler/experiment.yml"
+expr_config = "/home/john/RIT CS Masters/MBRL/satellite-inspection-dynamics-models/configs/translational-inspection/experiment.yml"
 output_path = "/tmp/MBRL/"
 
 # initialize ray, parse experiment args, initialize env, and load PPO policy from ckpt

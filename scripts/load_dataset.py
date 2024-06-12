@@ -28,24 +28,29 @@ def load_dataset():
         "sa": [],
         "s*": []
     }
+    num_ppo_data = 0
+    num_random_data = 0
 
     for row in ppo1_data["Trajectory"]:
         for i in range(len(row)):
             if not row[i] is row[-1]:
                 data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
                 data_dict['s*'].append(row[i+1][0])
+                num_ppo_data += 1
 
     for row in ppo2_data["Trajectory"]:
         for i in range(len(row)):
             if not row[i] is row[-1]:
                 data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
                 data_dict['s*'].append(row[i+1][0])
+                num_ppo_data += 1
 
     for row in random_data["Trajectory"]:
         for i in range(len(row)):
             if not row[i] is row[-1]:
                 data_dict['sa'].append(np.concatenate((row[i][0], row[i][1])))
                 data_dict['s*'].append(row[i+1][0])
+                num_random_data += 1
 
     return pd.DataFrame(data_dict)
 
