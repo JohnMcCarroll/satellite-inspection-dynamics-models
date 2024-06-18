@@ -44,8 +44,8 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     # Define input and output sizes
-    input_size = 14
-    output_size = 11
+    input_size = 15
+    output_size = 12
 
     # Initialize the network, loss function, and optimizer
     model = MLP(input_size, output_size)
