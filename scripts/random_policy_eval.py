@@ -57,7 +57,8 @@ def sample_nested_action_space(action_space):
 checkpoint_paths = [
     "/tmp/safe-autonomy-sims/output/tune/TRANSLATIONAL-INSPECTION/TRANSLATIONAL-INSPECTION-PPO_CorlMultiAgentEnv_8f57d_00000_0_2024-05-14_15-24-19/checkpoint_000011",
 ]
-expr_config = "/home/john/AFRL/dle/safe-autonomy-sims/configs/translational-inspection-no-rejection-sampler/experiment.yml"
+# expr_config = "/home/john/AFRL/dle/safe-autonomy-sims/configs/translational-inspection-no-rejection-sampler/experiment.yml"
+expr_config = "/home/john/RIT CS Masters/MBRL/satellite-inspection-dynamics-models/configs/translational-inspection/experiment.yml"
 output_path = "/tmp/MBRL/"
 
 # initialize ray, parse experiment args, initialize env, and load PPO policy from ckpt
@@ -87,7 +88,7 @@ num_steps = 0
 # then substitute for random policy + collect data until episode end
 # store random actor transistions for dataset
 # track num stored transitions. terminate at 1500
-while num_steps < 552925:
+while num_steps < 283145:
     seed = random.randrange(2000)
     obs, reward = env.reset(seed=seed)
     num_policy_steps = random.randrange(337)
@@ -104,13 +105,12 @@ while num_steps < 552925:
         action = sample_nested_action_space(action_space)
         obs, reward, dones, terminated, info = env.step(action)
         trajectory.append((obs, action, env.reward_info['blue0_ctrl'], reward, terminated))
-        num_steps += 1
         ep_len += 1
     print(ep_len)
     if len(trajectory) > 0:
         trajectories['Trajectory'].append(trajectory)
-        num_steps += len(trajectory)
+        num_steps += len(trajectory) - 1
 
 df = pd.DataFrame(trajectories)
-df.to_pickle(output_path + '/random_data.pkl')
+df.to_pickle('../random_dataset2.pkl')
 
