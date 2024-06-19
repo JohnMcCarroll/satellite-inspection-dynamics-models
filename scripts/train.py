@@ -25,9 +25,12 @@ class DataFrameDataset(Dataset):
 class MLP(nn.Module):
     def __init__(self, input_size, output_size):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, output_size)
+        # self.fc1 = nn.Linear(input_size, 256)
+        # self.fc2 = nn.Linear(256, 256)
+        # self.fc3 = nn.Linear(256, output_size)
+        self.fc1 = nn.Linear(input_size, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+        self.fc3 = nn.Linear(1024, output_size)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -72,5 +75,5 @@ if __name__ == "__main__":
     print("Training completed.")
 
     # Save the trained model
-    model_path = 'models/linear_model_256.pth'
+    model_path = 'models/linear_model_1024.pth'
     torch.save(model.state_dict(), model_path)
