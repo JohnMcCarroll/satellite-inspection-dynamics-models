@@ -5,29 +5,31 @@ import numpy as np
 import torch
 from load_dataset import load_test_dataset
 from train import MLP256, MLP1024
-import numpy as np
 import matplotlib.pyplot as plt
 import copy
 import pickle
 import itertools
+from typing import Optional
+from pathlib import Path
+from collections import defaultdict
 
 
 # Calculate error between model output and target vector
 def euclidean_distance(output, target):
-    return np.sqrt(np.sum((output - target)**2))
+    return np.sqrt(np.sum((output - target) ** 2))
+
 
 # Plot given error and std dev
 def error_plot(
-        x: dict, 
-        y: dict, 
+        x: dict,
+        y: dict,
         quantiles_75: dict,
-        quantiles_25: dict, 
-        x_scale: int = 49, 
-        model_name: str = "", 
-        error_name: str = "", 
+        quantiles_25: dict,
+        x_scale: int = 49,
+        model_name: str = "",
+        error_name: str = "",
         log_scale: bool = False
-    ):
-
+):
     # # Log scaling
     # if log_scale:
     #     y = copy.deepcopy(y)
@@ -46,7 +48,8 @@ def error_plot(
         # upper_bounds = np.add(error[0:x_scale], std_dev[0:x_scale])
         lower_bounds = quantiles_25
         upper_bounds = quantiles_75
-        plt.fill_between(steps[model_name][0:x_scale], lower_bounds[model_name][0:x_scale], upper_bounds[model_name][0:x_scale], alpha=0.3)
+        plt.fill_between(steps[model_name][0:x_scale], lower_bounds[model_name][0:x_scale],
+                         upper_bounds[model_name][0:x_scale], alpha=0.3)
 
     log_label = "Log " if log_scale else ""
     plt.xlabel("Steps")
@@ -247,4 +250,5 @@ if __name__ == "__main__":
             model_name: model_data[quantile_25_key] for model_name, model_data in eval_data.items()
         }
 
-        error_plot(steps, error, quantiles_75, quantiles_25, x_scale=x_scale, error_name=error_type, log_scale=log_scale)
+        error_plot(steps, error, quantiles_75, quantiles_25, x_scale=x_scale, error_name=error_type,
+                   log_scale=log_scale)
