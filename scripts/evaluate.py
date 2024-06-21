@@ -104,6 +104,7 @@ def get_eval_data(models: dict, input_size=15, output_size=12, save_file: Option
                 multistep_predictions = {}
                 target_states = {}
                 # final_state = trajectory[final_state_index][0:11]
+                # TODO - vectorize over states by treating `trajectory` as a batch
                 for i in range(final_state_index):
                     # predicted_trajectory = []
                     state_action = torch.tensor(trajectory[i], dtype=torch.float32)
