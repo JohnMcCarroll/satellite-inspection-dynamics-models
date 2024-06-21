@@ -13,6 +13,16 @@ from typing import Optional
 from pathlib import Path
 from collections import defaultdict
 
+# TODO - refactor this somewhere sensible
+NAMED_STATE_RANGES = {
+    "all": slice(0, 12),
+    "position": slice(0, 3),
+    "velocity": slice(3, 6),
+    "inspected_points": slice(6, 7),
+    "uninspected_points": slice(7, 10),
+    "sun_angle": slice(10, 12),
+}
+
 
 # Calculate error between model output and target vector
 def euclidean_distance(output, target):
@@ -84,13 +94,8 @@ def get_eval_data(models: dict, input_size=15, output_size=12, save_file: Option
         model.load_state_dict(torch.load(model_cfg[1]))
         model.eval()
 
-        # Evaluate the model
-        error_by_steps = defaultdict(list)
-        position_error_by_steps = defaultdict(list)
-        velocity_error_by_steps = defaultdict(list)
-        inspected_points_error_by_steps = defaultdict(list)
-        uninspected_points_error_by_steps = defaultdict(list)
-        sun_angle_error_by_steps = defaultdict(list)
+        # Evaluate the model on different slices of the data
+        error_by_steps = defaultdict(lambda: defaultdict(list))
 
         with torch.no_grad():
             for trajectory in test_df['Trajectory']:
@@ -124,88 +129,29 @@ def get_eval_data(models: dict, input_size=15, output_size=12, save_file: Option
                 for k, v in multistep_predictions.items():
                     num_steps = k[1] - k[0]
                     output = v.numpy()
-                    total_dist = euclidean_distance(output, target_states[k])
-                    position_dist = euclidean_distance(output[0:3], target_states[k][0:3])
-                    velocity_dist = euclidean_distance(output[3:6], target_states[k][3:6])
-                    inspected_points_dist = euclidean_distance(output[6], target_states[k][6])
-                    uninspected_pointstotal_dist = euclidean_distance(output[7:10],
-                                                                      target_states[k][7:10])
-                    sun_angle_dist = euclidean_distance(output[10:], target_states[k][10:])
-                    error_by_steps[num_steps].append(total_dist)
-                    position_error_by_steps[num_steps].append(position_dist)
-                    velocity_error_by_steps[num_steps].append(velocity_dist)
-                    inspected_points_error_by_steps[num_steps].append(inspected_points_dist)
-                    uninspected_points_error_by_steps[num_steps].append(
-                        uninspected_pointstotal_dist)
-                    sun_angle_error_by_steps[num_steps].append(sun_angle_dist)
+                    for state_key, state_range in NAMED_STATE_RANGES.items():
+                        error_by_steps[state_key][num_steps].append(
+                            euclidean_distance(output[state_range], target_states[k][state_range])
+                        )
 
-        # Calculate the mean and standard deviation
+        # Calculate summary statistics of different slices of the data
+
         steps = []
-        medians = []
-        quantiles_75 = []
-        quantiles_25 = []
-        position_medians = []
-        position_quantiles_75 = []
-        position_quantiles_25 = []
-        velocity_medians = []
-        velocity_quantiles_75 = []
-        velocity_quantiles_25 = []
-        inspected_points_medians = []
-        inspected_points_quantiles_75 = []
-        inspected_points_quantiles_25 = []
-        uninspected_points_medians = []
-        uninspected_points_quantiles_75 = []
-        uninspected_points_quantiles_25 = []
-        sun_angle_medians = []
-        sun_angle_quantiles_75 = []
-        sun_angle_quantiles_25 = []
+        medians = defaultdict(list)
+        quantiles_75 = defaultdict(list)
+        quantiles_25 = defaultdict(list)
         for i in range(1, len(error_by_steps)):
-            medians.append(np.quantile(error_by_steps[i], 0.50))
-            quantiles_75.append(np.quantile(error_by_steps[i], 0.75))
-            quantiles_25.append(np.quantile(error_by_steps[i], 0.25))
-            steps.append(i)
-            position_medians.append(np.quantile(position_error_by_steps[i], 0.50))
-            position_quantiles_75.append(np.quantile(position_error_by_steps[i], 0.75))
-            position_quantiles_25.append(np.quantile(position_error_by_steps[i], 0.25))
-            velocity_medians.append(np.quantile(velocity_error_by_steps[i], 0.50))
-            velocity_quantiles_75.append(np.quantile(velocity_error_by_steps[i], 0.75))
-            velocity_quantiles_25.append(np.quantile(velocity_error_by_steps[i], 0.25))
-            inspected_points_medians.append(np.quantile(inspected_points_error_by_steps[i], 0.50))
-            inspected_points_quantiles_75.append(
-                np.quantile(inspected_points_error_by_steps[i], 0.75))
-            inspected_points_quantiles_25.append(
-                np.quantile(inspected_points_error_by_steps[i], 0.25))
-            uninspected_points_medians.append(
-                np.quantile(uninspected_points_error_by_steps[i], 0.50))
-            uninspected_points_quantiles_75.append(
-                np.quantile(uninspected_points_error_by_steps[i], 0.75))
-            uninspected_points_quantiles_25.append(
-                np.quantile(uninspected_points_error_by_steps[i], 0.25))
-            sun_angle_medians.append(np.quantile(sun_angle_error_by_steps[i], 0.50))
-            sun_angle_quantiles_75.append(np.quantile(sun_angle_error_by_steps[i], 0.75))
-            sun_angle_quantiles_25.append(np.quantile(sun_angle_error_by_steps[i], 0.25))
+            for state_key in NAMED_STATE_RANGES.keys():
+                medians[state_key].append(np.quantile(error_by_steps[state_key][i], 0.50))
+                quantiles_75[state_key].append(np.quantile(error_by_steps[state_key][i], 0.75))
+                quantiles_25[state_key].append(np.quantile(error_by_steps[state_key][i], 0.25))
 
         # Store eval results
         eval_data[model_name] = {
             "steps": steps,
             "medians": medians,
             "quantiles_75": quantiles_75,
-            "quantiles_25": quantiles_25,
-            "position_medians": position_medians,
-            "position_quantiles_75": position_quantiles_75,
-            "position_quantiles_25": position_quantiles_25,
-            "velocity_medians": velocity_medians,
-            "velocity_quantiles_75": velocity_quantiles_75,
-            "velocity_quantiles_25": velocity_quantiles_25,
-            "inspected_points_medians": inspected_points_medians,
-            "inspected_points_quantiles_75": inspected_points_quantiles_75,
-            "inspected_points_quantiles_25": inspected_points_quantiles_25,
-            "uninspected_points_medians": uninspected_points_medians,
-            "uninspected_points_quantiles_75": uninspected_points_quantiles_75,
-            "uninspected_points_quantiles_25": uninspected_points_quantiles_25,
-            "sun_angle_medians": sun_angle_medians,
-            "sun_angle_quantiles_75": sun_angle_quantiles_75,
-            "sun_angle_quantiles_25": sun_angle_quantiles_25,
+            "quantiles_25": quantiles_25
         }
 
     # Save out eval data
