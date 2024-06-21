@@ -95,12 +95,11 @@ def get_eval_data(models: dict, input_size=15, output_size=12, save_file: Option
         with torch.no_grad():
             for trajectory in test_df['Trajectory']:
                 # Create multistep predictions for each trajectory in test dataset
-                i = 0
                 final_state_index = len(trajectory) - 1
                 multistep_predictions = {}
                 target_states = {}
                 # final_state = trajectory[final_state_index][0:11]
-                while i < final_state_index:
+                for i in range(final_state_index):
                     # predicted_trajectory = []
                     state_action = torch.tensor(trajectory[i], dtype=torch.float32)
                     future_actions = [state_action[-3:] for state_action in
@@ -122,7 +121,6 @@ def get_eval_data(models: dict, input_size=15, output_size=12, save_file: Option
                             state_action = torch.tensor(
                                 np.concatenate((predicted_state, future_actions[k])),
                                 dtype=torch.float32)
-                    i += 1
                 for k, v in multistep_predictions.items():
                     num_steps = k[1] - k[0]
                     output = v.numpy()
