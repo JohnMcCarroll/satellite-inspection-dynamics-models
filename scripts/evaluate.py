@@ -74,13 +74,13 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
     # Calculate summary statistics of different slices of the data
     eval_data[model_name] = {"steps": np.arange(1, max_steps + 1)}
     for state_key in NAMED_STATE_RANGES.keys():
-        medians = np.zeros(max_steps+1)
-        quantiles_25 = np.zeros(max_steps+1)
-        quantiles_75 = np.zeros(max_steps+1)
+        medians = np.zeros(max_steps)
+        quantiles_25 = np.zeros(max_steps)
+        quantiles_75 = np.zeros(max_steps)
         for step, error in errors[state_key].items():
-            medians[step] = np.median(error)
-            quantiles_25[step] = np.quantile(error, 0.25)
-            quantiles_75[step] = np.quantile(error, 0.75)
+            medians[step-1] = np.median(error)
+            quantiles_25[step-1] = np.quantile(error, 0.25)
+            quantiles_75[step-1] = np.quantile(error, 0.75)
 
         eval_data[model_name][state_key] = {
             "median": medians,
@@ -106,6 +106,7 @@ if __name__ == "__main__":
 
     for model_name, model_cfg in models.items():
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
+        # eval_save_file = None
         model_eval_data = get_eval_data(model_name, model_cfg, save_file=eval_save_file)
         eval_data = eval_data | model_eval_data
 
