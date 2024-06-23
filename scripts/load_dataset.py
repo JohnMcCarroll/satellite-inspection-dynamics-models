@@ -78,7 +78,7 @@ def load_dataset():
 
 def load_test_dataset():
     # Load in DataFrames from file
-    test_path = os.path.join(os.path.dirname(__file__), "../data/processed_test_dataset.pkl")
+    test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_test_dataset.pkl")
 
     with open(test_path, 'rb') as file:
         test_data = pickle.load(file)
