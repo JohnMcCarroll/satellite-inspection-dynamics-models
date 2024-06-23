@@ -62,7 +62,7 @@ if __name__ == "__main__":
     output_size = 12
 
     # Initialize the network, loss function, and optimizer
-    model = MLP(input_size, output_size)
+    model = MLP256(input_size, output_size)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
