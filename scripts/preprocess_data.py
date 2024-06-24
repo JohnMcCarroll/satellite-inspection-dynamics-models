@@ -45,19 +45,19 @@ def z_score_dataframe(df, mean, std):
     return pd.DataFrame({'Trajectory': z_scored_trajectories})
 
 # load data
-file_path1 = "data/ppo_dataset3.pkl"
-file_path2 = "data/ppo_dataset4.pkl"
-# file_path3 = "data/random_dataset.pkl"
-# file_path4 = "data/random_dataset3.pkl"
-# file_path5 = "data/random_dataset4.pkl"
-file_path6 = "data/ppo_test_dataset.pkl"
-file_path6 = "data/ppo_val_dataset.pkl"
+file_path1 = "datasets/ppo_dataset3.pkl"
+file_path2 = "datasets/ppo_dataset4.pkl"
+# file_path3 = "datasets/random_dataset.pkl"
+# file_path4 = "datasets/random_dataset3.pkl"
+# file_path5 = "datasets/random_dataset4.pkl"
+file_path5 = "datasets/ppo_test_dataset.pkl"
+file_path6 = "datasets/ppo_val_dataset.pkl"
 
 data_files = [
     file_path1,
     file_path2,
-    file_path3,
-    file_path4,
+    # file_path3,
+    # file_path4,
     file_path5,
     file_path6
 ]

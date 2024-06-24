@@ -51,7 +51,11 @@ class MLP1024(nn.Module):
 
 
 if __name__ == "__main__":
-    df = load_dataset()
+    # Define number of steps model will be trained to predict
+    prediction_size = 5
+    
+    # Load in training data
+    df = load_dataset(prediction_size=prediction_size)
 
     # Create dataset and dataloader
     dataset = DataFrameDataset(df)
