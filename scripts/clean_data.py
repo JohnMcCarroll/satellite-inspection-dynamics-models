@@ -22,19 +22,21 @@ def load_df_from_file(file_path):
 
 # Load Dataframes
 # file_path1 = "/tmp/MBRL/eval_data_df.pkl"
-file_path2 = "../random_dataset2.pkl"
+# file_path2 = "../random_dataset2.pkl"
+file_path2 = "ppo_eval_data_df2.pkl"
+file_path2 = "/home/john/RIT CS Masters/MBRL/satellite-inspection-dynamics-models/ppo_eval_data_df2.pkl"
 # policy_df = load_df_from_file(file_path1)
-random_df = load_df_from_file(file_path2)
+policy_df = load_df_from_file(file_path2)
 
 
 # Remove extra columns + add labels
-# policy_df['Policy'] = "PPO"
-random_df['Policy'] = "Random"
+policy_df['Policy'] = "PPO"
+# random_df['Policy'] = "Random"
 # policy_df = policy_df[['Trajectory', 'Policy']]
 
 # Combine random and policy datasets
 # dataset = pd.concat([policy_df, random_df], ignore_index=True)
-dataset = random_df
+dataset = policy_df
 
 # Parse action and observation dicts
 for i in range(dataset.shape[0]):
@@ -97,10 +99,15 @@ for i in range(dataset.shape[0]):
 
 
 split_index = len(dataset) // 2
+test_split_index = (len(dataset) * 6) // 8
+val_split_index = (len(dataset) * 7) // 8
 df1 = dataset.iloc[:split_index].copy()
-df2 = dataset.iloc[split_index:].copy()
+df2 = dataset.iloc[split_index:test_split_index].copy()
+df_test = dataset.iloc[test_split_index:val_split_index].copy()
+df_val = dataset.iloc[val_split_index:].copy()
 
-
-df1.to_pickle('random_dataset3.pkl')
-df2.to_pickle('random_dataset4.pkl')
+df1.to_pickle('ppo_dataset3.pkl')
+df2.to_pickle('ppo_dataset4.pkl')
+df_test.to_pickle('ppo_test_dataset.pkl')
+df_val.to_pickle('ppo_val_dataset.pkl')
 
