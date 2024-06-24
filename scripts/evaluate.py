@@ -43,7 +43,6 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
     model.load_state_dict(torch.load(model_cfg[1]))
     model.eval()
 
-
     with torch.no_grad():
         for trajectory_idx, trajectory in enumerate(test_df['Trajectory']):
             # Create multistep predictions for each trajectory in test dataset
@@ -52,19 +51,18 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
             states = state_actions[:,0:output_size]
             # prediction_size = 1
             for delta_t in range(1, max_steps+1):
-                if delta_t > max_steps:
-                    break
-
                 # Compute next prediction step
                 predicted_states = model(state_actions)
                 predicted_states = predicted_states[0:final_state_index - delta_t]
                 state_actions = torch.concat((predicted_states, state_actions[0:final_state_index-delta_t,output_size:input_size]), dim=1)
                 # Compute and store error
                 for i in range(0,final_state_index - delta_t + 1):
-                    if i >= max_steps or i >= predicted_states.shape[0]:
+                    # Iterate through predictions tensor (contains all predictions of depth `delta_t`)
+                    if i >= predicted_states.shape[0]:
+                        # Size of predictions within scope of trajectory decreases each delta_t increment
                         break
                     for state_key, state_range in NAMED_STATE_RANGES.items():
-                        errors[state_key][i+1].append(
+                        errors[state_key][delta_t].append(
                             euclidean_distance(
                                 predicted_states[i][state_range].numpy(),
                                 states[i+delta_t][state_range].numpy()
@@ -99,7 +97,7 @@ if __name__ == "__main__":
     models = {
         # model_name: (model_class, model_file_path)
         "linear_256": (MLP256, 'models/linear_model_256.pth'),
-        # "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
+        "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
     }
 
     eval_data = {}
