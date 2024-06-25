@@ -59,7 +59,7 @@ def get_eval_data(
             final_state_index = len(trajectory)
             state_actions = torch.from_numpy(np.stack(np.array(trajectory))).to(torch.float32)
             states = state_actions[:,0:output_size]
-            for delta_t in range(1, max_steps+1, prediction_size):
+            for delta_t in range(1, max_steps+1):
                 # Compute next prediction step
                 predicted_states = model(state_actions)
                 predicted_states = predicted_states[0:final_state_index - delta_t]
@@ -71,7 +71,7 @@ def get_eval_data(
                         # Size of predictions within scope of trajectory decreases each delta_t increment
                         break
                     for state_key, state_range in NAMED_STATE_RANGES.items():
-                        errors[state_key][delta_t].append(
+                        errors[state_key][delta_t * prediction_size].append(
                             euclidean_distance(
                                 predicted_states[i][state_range].numpy(),
                                 states[i+delta_t][state_range].numpy()
@@ -84,9 +84,9 @@ def get_eval_data(
     # Calculate summary statistics of different slices of the data
     eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
     for state_key in NAMED_STATE_RANGES.keys():
-        medians = np.zeros(max_steps)
-        quantiles_25 = np.zeros(max_steps)
-        quantiles_75 = np.zeros(max_steps)
+        medians = np.zeros(len(eval_data[model_name]['steps']))
+        quantiles_25 = np.zeros(len(eval_data[model_name]['steps']))
+        quantiles_75 = np.zeros(len(eval_data[model_name]['steps']))
         for step, error in errors[state_key].items():
             medians[step-1] = np.median(error)
             quantiles_25[step-1] = np.quantile(error, 0.25)
