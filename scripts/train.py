@@ -6,7 +6,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import torch.optim as optim
-from load_dataset import load_dataset
+import math
+from load_dataset import load_dataset, load_validation_dataset
+from evaluate import get_eval_data
+from models import MLP256, MLP1024
 
 
 class DataFrameDataset(Dataset):
@@ -22,40 +25,13 @@ class DataFrameDataset(Dataset):
         return torch.tensor(input_data, dtype=torch.float32), torch.tensor(output_data, dtype=torch.float32)
 
 
-class MLP256(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(MLP256, self).__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, output_size)
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
-class MLP1024(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(MLP1024, self).__init__()
-        self.fc1 = nn.Linear(input_size, 1024)
-        self.fc2 = nn.Linear(1024, 1024)
-        self.fc3 = nn.Linear(1024, output_size)
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
 if __name__ == "__main__":
     # Define number of steps model will be trained to predict
-    prediction_size = 5
+    prediction_size = 1
     
     # Load in training data
     df = load_dataset(prediction_size=prediction_size)
+    val_df = load_validation_dataset()
 
     # Create dataset and dataloader
     dataset = DataFrameDataset(df)
@@ -67,11 +43,13 @@ if __name__ == "__main__":
 
     # Initialize the network, loss function, and optimizer
     model = MLP256(input_size, output_size)
+    model_save_path = 'models/linear_model_256.pth'
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Training loop
     num_epochs = 100
+    best_error = math.inf
     for epoch in range(num_epochs):
         for inputs, targets in dataloader:
             # Zero the parameter gradients
@@ -85,10 +63,20 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
+        # Calculate validation set error
+        model_val_data = get_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=True)
+        model.train()
+        val_error = model_val_data['model_in_training']['all']['median'][0]
+        if val_error < best_error:
+            best_error = val_error
+            # Save the trained model
+            model_path = model_save_path
+            torch.save(model.state_dict(), model_path)
+
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
 
     print("Training completed.")
 
-    # Save the trained model
-    model_path = 'models/linear_model_1024.pth'
-    torch.save(model.state_dict(), model_path)
+    # load val dataset
+    # call get eval data each training loop
+    # save model ckpt if error < best_error

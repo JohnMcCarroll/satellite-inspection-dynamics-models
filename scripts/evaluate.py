@@ -4,8 +4,9 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from train import MLP256, MLP1024
+from models import MLP256, MLP1024
 import matplotlib.pyplot as plt
+import pandas as pd
 import copy
 import pickle
 import itertools
@@ -20,8 +21,19 @@ def euclidean_distance(output, target):
     return np.sqrt(np.sum((output - target) ** 2))
 
 
-def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=12, max_steps: int = 50,
-                  save_file: Optional[Path] = None):
+def get_eval_data(
+        test_df: pd.DataFrame,
+        model_name: str,
+        model_cfg: tuple,
+        input_size: int = 15,
+        output_size: int = 12,
+        max_steps: int = 50,
+        save_file: Optional[Path] = None,
+        model: torch.nn.Module = None,
+        prediction_size: int = 1,
+        save_data: bool = True,
+        validation: bool = False
+    ):
     """
     Collects multistep prediction error of given model or loads evaluation data from file.
     """
@@ -29,18 +41,16 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
         with open(str(save_file), 'rb') as file:
             return pickle.load(file)
 
-    # Load test dataset from file
-    test_df = load_test_dataset()
-
     # Initialize data structures to store evaluation data
     eval_data = {}
     errors = {
-        k: {num_steps: [] for num_steps in range(1,max_steps+1)} for k in NAMED_STATE_RANGES.keys()
+        k: {num_steps: [] for num_steps in range(prediction_size, max_steps+1, prediction_size)} for k in NAMED_STATE_RANGES.keys()
     }
 
     # Load the trained model
-    model = model_cfg[0](input_size, output_size)
-    model.load_state_dict(torch.load(model_cfg[1]))
+    if model is None:
+        model = model_cfg[0](input_size, output_size)
+        model.load_state_dict(torch.load(model_cfg[1]))
     model.eval()
 
     with torch.no_grad():
@@ -49,8 +59,7 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
             final_state_index = len(trajectory)
             state_actions = torch.from_numpy(np.stack(np.array(trajectory))).to(torch.float32)
             states = state_actions[:,0:output_size]
-            # prediction_size = 1
-            for delta_t in range(1, max_steps+1):
+            for delta_t in range(1, max_steps+1, prediction_size):
                 # Compute next prediction step
                 predicted_states = model(state_actions)
                 predicted_states = predicted_states[0:final_state_index - delta_t]
@@ -68,9 +77,12 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
                                 states[i+delta_t][state_range].numpy()
                             )
                         )
+                if validation:
+                    # no need to evaluate multiple steps for validation
+                    break
 
     # Calculate summary statistics of different slices of the data
-    eval_data[model_name] = {"steps": np.arange(1, max_steps + 1)}
+    eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
     for state_key in NAMED_STATE_RANGES.keys():
         medians = np.zeros(max_steps)
         quantiles_25 = np.zeros(max_steps)
@@ -79,6 +91,8 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
             medians[step-1] = np.median(error)
             quantiles_25[step-1] = np.quantile(error, 0.25)
             quantiles_75[step-1] = np.quantile(error, 0.75)
+            if validation:
+                break
 
         eval_data[model_name][state_key] = {
             "median": medians,
@@ -87,25 +101,29 @@ def get_eval_data(model_name: str, model_cfg: tuple, input_size=15, output_size=
         }
 
     # Save out eval data
-    with open(str(save_file), 'wb') as file:
-        pickle.dump(eval_data, file)
+    if save_data:
+        with open(str(save_file), 'wb') as file:
+            pickle.dump(eval_data, file)
 
     return eval_data
 
 
 if __name__ == "__main__":
+    prediction_size = 1
     models = {
         # model_name: (model_class, model_file_path)
         "linear_256": (MLP256, 'models/linear_model_256.pth'),
         "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
     }
 
+    # Load test dataset from file
+    test_df = load_test_dataset()
     eval_data = {}
 
     for model_name, model_cfg in models.items():
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
         # eval_save_file = None
-        model_eval_data = get_eval_data(model_name, model_cfg, save_file=eval_save_file)
+        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -122,6 +140,7 @@ if __name__ == "__main__":
         ax[i].set_ylabel("Prediction Error")
         ax[i].legend()
         ax[i].set_yscale("log")
+
     fig.tight_layout()
     plt.savefig("plots/mlp_error_by_steps.png")
     plt.show()

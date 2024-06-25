@@ -80,3 +80,21 @@ def load_test_dataset():
         data_dict['Trajectory'].append(traj)
 
     return pd.DataFrame(data_dict)
+
+def load_validation_dataset():
+    # Load in DataFrames from file
+    test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_val_dataset.pkl")
+
+    with open(test_path, 'rb') as file:
+        test_data = pickle.load(file)
+
+    # Parse data
+    data_dict = {
+        "Trajectory": [],
+    }
+
+    for row in test_data["Trajectory"]:
+        traj = [np.concatenate((mdp[0],mdp[1])) for mdp in row]
+        data_dict['Trajectory'].append(traj)
+
+    return pd.DataFrame(data_dict)
