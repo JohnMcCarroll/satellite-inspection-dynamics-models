@@ -66,7 +66,7 @@ if __name__ == "__main__":
         # Calculate validation set error
         model_val_data = get_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=True)
         model.train()
-        val_error = model_val_data['model_in_training']['all']['median'][prediction_size-1]
+        val_error = model_val_data['model_in_training']['all']['median'][0]
         if val_error < best_error:
             best_error = val_error
             # Save the trained model

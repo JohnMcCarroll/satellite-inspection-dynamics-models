@@ -84,13 +84,13 @@ def get_eval_data(
     # Calculate summary statistics of different slices of the data
     eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
     for state_key in NAMED_STATE_RANGES.keys():
-        medians = np.zeros(len(eval_data[model_name]['steps']))
-        quantiles_25 = np.zeros(len(eval_data[model_name]['steps']))
-        quantiles_75 = np.zeros(len(eval_data[model_name]['steps']))
-        for step, error in errors[state_key].items():
-            medians[step-1] = np.median(error)
-            quantiles_25[step-1] = np.quantile(error, 0.25)
-            quantiles_75[step-1] = np.quantile(error, 0.75)
+        medians = np.full(len(eval_data[model_name]['steps']), np.nan)
+        quantiles_25 = np.full(len(eval_data[model_name]['steps']), np.nan)
+        quantiles_75 = np.full(len(eval_data[model_name]['steps']), np.nan)
+        for index, (step, error) in enumerate(errors[state_key].items()):
+            medians[index] = np.median(error)
+            quantiles_25[index] = np.quantile(error, 0.25)
+            quantiles_75[index] = np.quantile(error, 0.75)
             if validation:
                 break
 
