@@ -7,19 +7,15 @@ from load_dataset import load_test_dataset
 from models import MLP256, MLP1024
 import matplotlib.pyplot as plt
 import pandas as pd
-import copy
 import pickle
-import itertools
 from typing import Optional
 from pathlib import Path
-from collections import defaultdict
 from constants import NAMED_STATE_RANGES
 
 
 # Calculate error between model output and target vector
 def euclidean_distance(output, target):
     return np.sqrt(np.sum((output - target) ** 2))
-
 
 def get_eval_data(
         test_df: pd.DataFrame,
@@ -60,6 +56,11 @@ def get_eval_data(
             state_actions = torch.from_numpy(np.stack(np.array(trajectory))).to(torch.float32)
             states = state_actions[:,0:output_size]
             for delta_t in range(1, max_steps+1):
+                if delta_t * prediction_size > max_steps:
+                    # delta_t ~= number of subsequent model predictions
+                    # delta_t * prediction_size = num timesteps in the future model is predicting
+                    # Stop, if we are predicting past max_steps
+                    break
                 # Compute next prediction step
                 predicted_states = model(state_actions)
                 predicted_states = predicted_states[0:final_state_index - delta_t]
@@ -109,11 +110,12 @@ def get_eval_data(
 
 
 if __name__ == "__main__":
-    prediction_size = 1
+    prediction_size = 5
+    plot_save_path = "plots/5_step_mlp_error_by_steps.png"
     models = {
         # model_name: (model_class, model_file_path)
-        "linear_256": (MLP256, 'models/linear_model_256.pth'),
-        "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
+        "5_step_linear_256": (MLP256, 'models/5_step_linear_model_256.pth'),
+        "5_step_linear_1024": (MLP1024, 'models/5_step_linear_model_1024.pth'),
     }
 
     # Load test dataset from file
@@ -142,5 +144,5 @@ if __name__ == "__main__":
         ax[i].set_yscale("log")
 
     fig.tight_layout()
-    plt.savefig("plots/mlp_error_by_steps.png")
+    plt.savefig(plot_save_path)
     plt.show()
