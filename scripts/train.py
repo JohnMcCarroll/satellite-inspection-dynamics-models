@@ -42,8 +42,8 @@ if __name__ == "__main__":
     output_size = 12
 
     # Initialize the network, loss function, and optimizer
-    model = MLP1024(input_size, output_size)
-    model_save_path = 'models/5_step_linear_model_1024.pth'
+    model = MLP256(input_size, output_size)
+    model_save_path = 'models/5_step_linear_model_256.pth'
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -70,8 +70,7 @@ if __name__ == "__main__":
         if val_error < best_error:
             best_error = val_error
             # Save the trained model
-            model_path = model_save_path
-            torch.save(model.state_dict(), model_path)
+            torch.save(model.state_dict(), model_save_path)
 
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
         print(f'Val Error: {val_error:.4f}, Best Val Error: {best_error:.4f}')
