@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # Initialize the network, loss function, and optimizer
     model = MLP256(input_size, output_size)
-    model_save_path = 'models/5_step_linear_model_256.pth'
+    model_save_path = 'models/5_step_linear_model_256.pth' # TODO: oops, rename model*
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
