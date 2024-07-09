@@ -9,7 +9,7 @@ import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset
 from evaluate import get_eval_data
-from models import MLP256, MLP1024
+from models import MLP256, MLP1024, ConstrainedMLP
 
 
 class DataFrameDataset(Dataset):
@@ -42,12 +42,13 @@ if __name__ == "__main__":
     output_size = 12
 
     # Initialize the network, loss function, and optimizer
-    model = MLP256(input_size, output_size)
-    model_save_path = 'models/5_step_linear_model_256.pth' # TODO: oops, rename model*
+    model = ConstrainedMLP(input_size, output_size)
+    model_save_path = 'models/constrained_linear_model_256.pth'
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Training loop
+    torch.autograd.set_detect_anomaly(True)
     num_epochs = 100
     best_error = math.inf
     for epoch in range(num_epochs):

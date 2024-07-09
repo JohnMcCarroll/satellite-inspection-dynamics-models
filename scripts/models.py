@@ -50,7 +50,7 @@ class ConstrainedDeltaMLP(nn.Module):
     """
 
     def __init__(self, input_size, output_size):
-        super(MLP256, self).__init__()
+        super(ConstrainedDeltaMLP, self).__init__()
         self.fc1 = nn.Linear(input_size, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, output_size)
@@ -83,7 +83,7 @@ class ConstrainedMLP(nn.Module):
     """
 
     def __init__(self, input_size, output_size):
-        super(MLP256, self).__init__()
+        super(ConstrainedMLP, self).__init__()
         self.fc1 = nn.Linear(input_size, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, output_size)
@@ -94,42 +94,47 @@ class ConstrainedMLP(nn.Module):
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
 
+        x_constrained = x.clone()
+
         # Apply constraints
         # position must not exceed range [-1.0, 1.0] (-800 m, 800 m)
         # max distance constraint
-        x[0:2] = tanh(x[0:2])
+        x_constrained[:,0:3] = tanh(x[:,0:3])
 
         # Apply collision constraint: distance from chief (origin) cannot fall below [0.01875] (15 m)
         collision_threshold = 0.01875
-        deputy_distance = torch.norm(x[0:2])
+        deputy_distance = torch.norm(x[:,0:3])
         if deputy_distance <= collision_threshold:
             # Normalize the point to lie on the sphere of the given collision_threshold radius
-            x[0:2] = x[0:2] / deputy_distance * collision_threshold
+            x_constrained[:,0:3] = x[:,0:3] / deputy_distance * collision_threshold
         
         # No velocity constraint to apply
 
         # Inspected points must not exceed 1.0 (100 points inspected)
-        predicted_inspected_points = divide(add(tanh(x[6]), torch.tensor(np.array([1])), torch.tensor(np.array([2]))))
+        predicted_inspected_points = divide(add(tanh(x[:,6:7]), torch.tensor(np.array([1]))), torch.tensor(np.array([2])))
         # Inspected points must not decrease
-        x[6] = torch.max(predicted_inspected_points, x[6])
+        x_constrained[:,6:7] = torch.max(predicted_inspected_points, x[:,6:7])
 
         # Uninspected points cluster must not exceed [0.0125] (10 m)
         # Looks like cluster location is already normalized, meaning it won't be outside of a unit sphere
         chief_radius = 1
-        cluster_distance = torch.norm(x[7:9])
+        cluster_distance = torch.norm(x[:,7:10])
         if cluster_distance >= chief_radius:
             # Normalize the point to lie on the sphere of the given chief_radius radius
-            x[7:9] = x[7:9] / cluster_distance * chief_radius
+            x_constrained[:,7:10] = x[:,7:10] / cluster_distance * chief_radius
 
         # uninspected points location does not move towards agent
-        cur_dist_from_deputy = torch.norm(input[7:9] - input[0:2])
-        pred_dist_from_deputy = torch.norm(x[7:9] - input[0:2])
+        cur_dist_from_deputy = torch.norm(input[:,7:10] - input[:,0:3])
+        pred_dist_from_deputy = torch.norm(x[:,7:10] - input[:,0:3])
         if pred_dist_from_deputy < cur_dist_from_deputy:
             # Return previous cluster location
-            x[7:9] = input[7:9]
+            x_constrained[:,7:10] = input[:,7:10]
 
         # Sun angle prediction must be point on unit circle
-        normalized_sun_angle = torch.norm(x[10:11])
-        x[10:11] = x[10:11] / (normalized_sun_angle + 1e-8)
+        normalized_sun_angle = torch.norm(x[:,10:12])
+        # Prevent divide by zero error
+        delta = torch.full_like(normalized_sun_angle, 1e-8)
+        x_constrained[:,10:12] = divide(x[:,10:12], add(normalized_sun_angle, delta))
+        # x_constrained[:,10:12] = divide(x[:,10:12], normalized_sun_angle)
 
-        return x
+        return x_constrained
