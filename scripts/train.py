@@ -27,7 +27,7 @@ class DataFrameDataset(Dataset):
 
 if __name__ == "__main__":
     # Define number of steps model will be trained to predict
-    prediction_size = 5
+    prediction_size = 1
     
     # Load in training data
     df = load_dataset(prediction_size=prediction_size)
