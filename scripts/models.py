@@ -77,7 +77,7 @@ class NonlinearMLP(nn.Module):
         output[:,10:12] = predicted_sun_angles
 
         if self.predict_delta:
-            absolute_output = add(output, input[0:12])
+            absolute_output = add(output, input[:,0:12])
             return absolute_output
 
         return output
@@ -142,7 +142,8 @@ def apply_constraints(model_output, model_input):
     normalized_deputy_vector = deputy_vector / torch.norm(deputy_vector, dim=1).view(-1,1)
     deputy_direction_component = torch.einsum('ij,ij->i', delta_vector, deputy_vector)
     violations = deputy_direction_component > 0
-    offset_predicted_cluster_positions[violations] = subtract(predicted_cluster_positions[violations], normalized_deputy_vector[violations])
+    projection_of_delta_onto_deputy = (deputy_direction_component[violations] / torch.norm(delta_vector, dim=1)[violations]).unsqueeze(1) * delta_vector[violations]
+    offset_predicted_cluster_positions[violations] = subtract(predicted_cluster_positions[violations], projection_of_delta_onto_deputy * normalized_deputy_vector[violations])
 
     # Uninspected points cluster must not exceed [1] (10 m radius, but normalized already)
     cluster_distances = torch.norm(offset_predicted_cluster_positions, dim=1)

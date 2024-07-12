@@ -28,7 +28,7 @@ class DataFrameDataset(Dataset):
 if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
-    predict_delta = False  # Model's prediction of state change or absolute next state
+    predict_delta = True  # Model's prediction of state change or absolute next state
     constrain_output = True  # Constrain model's output to not violate environment constraints
     input_size = 15  # Define input and output sizes
     output_size = 12
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     # Create dataset and dataloader
     dataset = DataFrameDataset(df)
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     # Initialize the network, loss function, and optimizer
     criterion = nn.MSELoss()
