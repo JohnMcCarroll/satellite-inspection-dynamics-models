@@ -77,16 +77,34 @@ class NonlinearMLP(nn.Module):
         output[:,10:12] = predicted_sun_angles
 
         if self.predict_delta:
-            absolute_output = add(output, input)
+            absolute_output = add(output, input[0:12])
             return absolute_output
 
         return output
 
 
-class RNN(nn.RNN):
+class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, predict_delta=False):
-        super(RNN, self).__init__(input_size, hidden_size, output_size)
+        super(RNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True, device='cuda')
+        self.fc = nn.Linear(hidden_size, output_size, device='cuda')
         self.predict_delta = predict_delta
+    
+    def forward(self, x, h=None):
+        if h is None:
+            # Initialize hidden state with zeros
+            h = torch.zeros(1, self.hidden_size).to(x.device)
+        
+        # Get RNN outputs
+        out, h = self.rnn(x, h)
+        out = self.fc(out)
+
+        if self.predict_delta:
+            absolute_out = add(out, x[0:12])
+            return absolute_out, h
+        
+        return out, h
 
 
 def apply_constraints(model_output, model_input):
