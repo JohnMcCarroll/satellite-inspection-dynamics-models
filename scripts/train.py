@@ -9,7 +9,7 @@ import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset
 from evaluate import get_eval_data
-from models import MLP256, MLP1024, ConstrainedMLP
+from models import MLP256, MLP1024, NonlinearMLP, apply_constraints
 
 
 class DataFrameDataset(Dataset):
@@ -26,30 +26,30 @@ class DataFrameDataset(Dataset):
 
 
 if __name__ == "__main__":
-    # Define number of steps model will be trained to predict
-    prediction_size = 1
-    
+    # Define training configuration
+    prediction_size = 1  # Define number of steps model will be trained to predict
+    predict_delta = False  # Model's prediction of state change or absolute next state
+    constrain_output = True  # Constrain model's output to not violate environment constraints
+    input_size = 15  # Define input and output sizes
+    output_size = 12
+    num_epochs = 100
+    model = NonlinearMLP(input_size, output_size, predict_delta=predict_delta)
+    model_save_path = 'models/constrained_linear_model_256.pth'
+
     # Load in training data
     df = load_dataset(prediction_size=prediction_size)
     val_df = load_validation_dataset()
 
     # Create dataset and dataloader
     dataset = DataFrameDataset(df)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-
-    # Define input and output sizes
-    input_size = 15
-    output_size = 12
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
     # Initialize the network, loss function, and optimizer
-    model = ConstrainedMLP(input_size, output_size)
-    model_save_path = 'models/constrained_linear_model_256.pth'
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Training loop
     torch.autograd.set_detect_anomaly(True)
-    num_epochs = 100
     best_error = math.inf
     for epoch in range(num_epochs):
         for inputs, targets in dataloader:
@@ -58,6 +58,9 @@ if __name__ == "__main__":
 
             # Forward pass
             outputs = model(inputs)
+            if constrain_output:
+                outputs = apply_constraints(outputs, inputs)
+
             loss = criterion(outputs.squeeze(), targets)
 
             # Backward pass and optimize
