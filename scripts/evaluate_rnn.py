@@ -4,7 +4,7 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from train import MLP256, MLP1024, NonlinearMLP, RNN, apply_constraints
+from models import MLP256, MLP1024, NonlinearMLP, RNN, apply_constraints
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
@@ -16,9 +16,14 @@ from constants import NAMED_STATE_RANGES
 import pandas as pd
 
 
+
 # Calculate error between model output and target vector
 def euclidean_distance(output, target):
     return np.sqrt(np.sum((output - target)**2))
+
+# Function to pad lists with NaNs
+def pad_list(lst, max_length):
+    return lst + [[np.nan]*15] * (max_length - len(lst))
 
 def get_rnn_eval_data(
         test_df: pd.DataFrame,
@@ -31,7 +36,9 @@ def get_rnn_eval_data(
         model: torch.nn.Module = None,
         prediction_size: int = 1,
         save_data: bool = True,
-        validation: bool = False
+        validation: bool = False,
+        batch_size: int = 128,
+        constrain_output: bool = False,
     ):
     """
     Collects multistep prediction error of given model or loads evaluation data from file.
@@ -53,110 +60,108 @@ def get_rnn_eval_data(
     model.eval()
 
     with torch.no_grad():
-        for trajectory in test_df['Trajectory']:
-            # Create multistep predictions for each trajectory in test dataset
-            i = 0
-            final_state_index = len(trajectory)-1
+        for j in range(0, len(test_df), batch_size):
+            if j+batch_size in test_df.index:
+                batch = test_df.iloc[j:j+batch_size]
+            else:
+                batch = test_df.iloc[j:-1]
+            max_length = batch.map(len).max().max()
+            # Apply padding function to each element in the DataFrame
+            padded_df = batch.map(lambda x: pad_list(x, max_length))
+            padded_array = np.array(padded_df.values.tolist(), dtype=np.float32)
+            trajectories = torch.tensor(padded_array, dtype=torch.float32, device='cuda').squeeze(1)
+            hidden_state = torch.zeros(1, len(batch), model.hidden_size).to('cuda')
+            actions = trajectories[:,:,-3:]
             multistep_predictions = {}
             target_states = {}
-            hidden_state = None
-            while i < final_state_index:
-                # predicted_trajectory = []
-                state_action = torch.tensor(trajectory[i], dtype=torch.float32)
-                future_actions = [state_action[-3:] for state_action in trajectory[i+1:final_state_index]]
+            final_state_index = trajectories.shape[1]-1
 
-                n = final_state_index - i
-                for k in range(n):
-                    if k > 49:
-                        # Model error compounds exponentially, don't waste compute on long range
-                        break
-                    # Use the model to predict n steps into the future
-                    # Where n is the number of timesteps between the input and target output in the trajectory
-                    predicted_state, hidden_state = model(state_action, hidden_state)
-                    # store model's prediction and ground truth target state
-                    multistep_predictions[(i,i+k+1)] = predicted_state
-                    target_states[(i,i+k+1)] = trajectory[i+k+1][0:12]
-                    # Concatentate model's predicted state with next taken action
-                    if k < n - 1:
-                        state_action = torch.tensor(np.concatenate((predicted_state,future_actions[k])), dtype=torch.float32)
-                i += 1
-                # Compute and store error
-                for j in range(0,final_state_index - delta_t + 1):
-                    # Iterate through predictions tensor (contains all predictions of depth `delta_t`)
-                    if j >= predicted_states.shape[0]:
-                        # Size of predictions within scope of trajectory decreases each delta_t increment
-                        break
+            for i in range(0, trajectories.shape[1]-1):
+                # compute first prediction step + store hidden state
+                state_action = trajectories[:,i:i+1,:]
+                target_output = trajectories[:,i+prediction_size:i+prediction_size+1,0:12]
+
+                # Handle NaNs
+                mask = ~torch.isnan(target_output)[:,0,0]
+
+                # Forward pass
+                output, hidden_state = model(state_action, hidden_state, mask=mask)
+                if constrain_output:
+                    output = apply_constraints(output)
+
+                multistep_predictions[(i,i+prediction_size)] = output
+                target_states[(i,i+prediction_size)] = target_output[mask]
+
+                # compute multistep predictions from initial step i+prediction_size
+                if not validation:
+                    remaining_steps = final_state_index - (i+prediction_size)
+                    multistep_prediction_hidden_state = hidden_state[:,mask,:].clone()
+                    multistep_target_outputs = trajectories[mask,:,0:12].clone()
+                    multistep_actions = actions[mask].clone()
+                    for k in range(prediction_size, remaining_steps, prediction_size):
+                        if k > max_steps:
+                            # Model error compounds exponentially, don't waste compute on long range
+                            break
+                        # Concatentate model's predicted state with next taken action
+                        if k+i+prediction_size < final_state_index-1:
+                            multistep_target_output = multistep_target_outputs[:,k+i+prediction_size:k+i+prediction_size+1,:]
+                            # Handle NaNs
+                            multistep_mask = ~torch.isnan(multistep_target_output)[:,0,0]
+                            state_action = torch.concatenate((output[multistep_mask],multistep_actions[multistep_mask,k+i+prediction_size:k+i+prediction_size+1,:]), dim=2)
+                            # Forward pass
+                            output, multistep_prediction_hidden_state = model(state_action, multistep_prediction_hidden_state[:,multistep_mask,:])
+                            if constrain_output:
+                                output = apply_constraints(output)
+
+                            # store model's prediction and ground truth target state
+                            multistep_predictions[(i+prediction_size,i+prediction_size+k)] = output
+                            target_states[(i+prediction_size,i+prediction_size+k)] = multistep_target_output[multistep_mask]
+
+                            # remove ended trajectories, to keep output + target dims aligned
+                            multistep_target_outputs = multistep_target_outputs[multistep_mask]
+                            multistep_actions = multistep_actions[multistep_mask]
+                        else:
+                            break
+
+            # Compute and store error
+            for key, predicted_states in multistep_predictions.items():
+                for l in range(predicted_states.shape[0]):
+                    actual_state = target_states[key][l]
+                    predicted_state = predicted_states[l]
+                    num_steps = key[1] - key[0]
                     for state_key, state_range in NAMED_STATE_RANGES.items():
-                        errors[state_key][delta_t * prediction_size].append(
+                        errors[state_key][num_steps].append(
                             euclidean_distance(
-                                predicted_states[j][state_range].numpy(),
-                                states[i+delta_t][state_range].numpy()
+                                predicted_state[state_range].cpu().numpy(),
+                                actual_state[state_range].cpu().numpy()
                             )
                         )
+
+        # Calculate summary statistics of different slices of the data
+        eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
+        for state_key in NAMED_STATE_RANGES.keys():
+            medians = np.full(len(eval_data[model_name]['steps']), np.nan)
+            quantiles_25 = np.full(len(eval_data[model_name]['steps']), np.nan)
+            quantiles_75 = np.full(len(eval_data[model_name]['steps']), np.nan)
+            for index, (step, error) in enumerate(errors[state_key].items()):
+                medians[index] = np.median(error)
+                quantiles_25[index] = np.quantile(error, 0.25)
+                quantiles_75[index] = np.quantile(error, 0.75)
                 if validation:
-                    # no need to evaluate multiple steps for validation
                     break
-        
-        
-        
-        # # batched code
-        # for trajectory_idx, trajectory in enumerate(test_df['Trajectory']):
-        #     # Create multistep predictions for each trajectory in test dataset
-        #     final_state_index = len(trajectory)
-        #     state_actions = torch.from_numpy(np.stack(np.array(trajectory))).to(torch.float32)
-        #     states = state_actions[:,0:output_size]
-        #     for delta_t in range(1, max_steps+1):
-        #         if delta_t * prediction_size > max_steps:
-        #             # delta_t ~= number of subsequent model predictions
-        #             # delta_t * prediction_size = num timesteps in the future model is predicting
-        #             # Stop, if we are predicting past max_steps
-        #             break
-        #         # Compute next prediction step
-        #         predicted_states = model(state_actions)
-        #         predicted_states = predicted_states[0:final_state_index - delta_t]
-        #         state_actions = torch.concat((predicted_states, state_actions[0:final_state_index-delta_t,output_size:input_size]), dim=1)
-        #         # Compute and store error
-        #         for i in range(0,final_state_index - delta_t + 1):
-        #             # Iterate through predictions tensor (contains all predictions of depth `delta_t`)
-        #             if i >= predicted_states.shape[0]:
-        #                 # Size of predictions within scope of trajectory decreases each delta_t increment
-        #                 break
-        #             for state_key, state_range in NAMED_STATE_RANGES.items():
-        #                 errors[state_key][delta_t * prediction_size].append(
-        #                     euclidean_distance(
-        #                         predicted_states[i][state_range].numpy(),
-        #                         states[i+delta_t][state_range].numpy()
-        #                     )
-        #                 )
-        #         if validation:
-        #             # no need to evaluate multiple steps for validation
-        #             break
 
-    # Calculate summary statistics of different slices of the data
-    eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
-    for state_key in NAMED_STATE_RANGES.keys():
-        medians = np.full(len(eval_data[model_name]['steps']), np.nan)
-        quantiles_25 = np.full(len(eval_data[model_name]['steps']), np.nan)
-        quantiles_75 = np.full(len(eval_data[model_name]['steps']), np.nan)
-        for index, (step, error) in enumerate(errors[state_key].items()):
-            medians[index] = np.median(error)
-            quantiles_25[index] = np.quantile(error, 0.25)
-            quantiles_75[index] = np.quantile(error, 0.75)
-            if validation:
-                break
+            eval_data[model_name][state_key] = {
+                "median": medians,
+                "quantiles_25": quantiles_25,
+                "quantiles_75": quantiles_75,
+            }
 
-        eval_data[model_name][state_key] = {
-            "median": medians,
-            "quantiles_25": quantiles_25,
-            "quantiles_75": quantiles_75,
-        }
+        # Save out eval data
+        if save_data:
+            with open(str(save_file), 'wb') as file:
+                pickle.dump(eval_data, file)
 
-    # Save out eval data
-    if save_data:
-        with open(str(save_file), 'wb') as file:
-            pickle.dump(eval_data, file)
-
-    return eval_data
+        return eval_data
 
 
 if __name__ == "__main__":
@@ -310,37 +315,37 @@ if __name__ == "__main__":
         "sun_angle_std_devs": sun_angle_std_devs,
     }
 
-# Save out eval data
-pickle.dump(eval_data, open(f'data/{eval_name}_eval_data.pkl', 'wb'))
+# # Save out eval data
+# pickle.dump(eval_data, open(f'data/{eval_name}_eval_data.pkl', 'wb'))
 
-# # Read data from file
-# with open(f'data/{eval_name}_eval_data.pkl', 'rb') as file:
-#     eval_data = pickle.load(file)
+# # # Read data from file
+# # with open(f'data/{eval_name}_eval_data.pkl', 'rb') as file:
+# #     eval_data = pickle.load(file)
 
-# Configure plotting
-log_scale = [True, False]
-x_scale = [5, 10, 20]
-error_type = [
-    "total",
-    "position",
-    "velocity",
-    "inspected_points",
-    "uninspected_points",
-    "sun_angle",
-]
+# # Configure plotting
+# log_scale = [True, False]
+# x_scale = [5, 10, 20]
+# error_type = [
+#     "total",
+#     "position",
+#     "velocity",
+#     "inspected_points",
+#     "uninspected_points",
+#     "sun_angle",
+# ]
 
-for error_type, x_scale, log_scale in itertools.product(error_type, x_scale, log_scale):
-    # Parse eval data
-    steps = {
-        model_name: model_data["steps"] for model_name, model_data in eval_data.items()
-    }
-    error_key = "means" if error_type == "total" else f"{error_type}_means"
-    std_devs_key = "std_devs" if error_type == "total" else f"{error_type}_std_devs"
-    error = {
-        model_name: model_data[error_key] for model_name, model_data in eval_data.items()
-    }
-    std_devs = {
-        model_name: model_data[std_devs_key] for model_name, model_data in eval_data.items()
-    }
+# for error_type, x_scale, log_scale in itertools.product(error_type, x_scale, log_scale):
+#     # Parse eval data
+#     steps = {
+#         model_name: model_data["steps"] for model_name, model_data in eval_data.items()
+#     }
+#     error_key = "means" if error_type == "total" else f"{error_type}_means"
+#     std_devs_key = "std_devs" if error_type == "total" else f"{error_type}_std_devs"
+#     error = {
+#         model_name: model_data[error_key] for model_name, model_data in eval_data.items()
+#     }
+#     std_devs = {
+#         model_name: model_data[std_devs_key] for model_name, model_data in eval_data.items()
+#     }
 
-    error_plot(steps, error, std_devs, x_scale=x_scale, error_name=error_type, log_scale=log_scale)
+#     error_plot(steps, error, std_devs, x_scale=x_scale, error_name=error_type, log_scale=log_scale)

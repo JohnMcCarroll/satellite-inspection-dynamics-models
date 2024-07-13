@@ -91,19 +91,28 @@ class RNN(nn.Module):
         self.fc = nn.Linear(hidden_size, output_size, device='cuda')
         self.predict_delta = predict_delta
     
-    def forward(self, x, h=None):
+    def forward(self, x, h=None, mask=None):
         if h is None:
             # Initialize hidden state with zeros
-            h = torch.zeros(1, self.hidden_size).to(x.device)
+            # h = torch.zeros(1, self.hidden_size).to(x.device)
+            h = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
         
-        # Get RNN outputs
-        out, h = self.rnn(x, h)
-        out = self.fc(out)
 
-        if self.predict_delta:
-            absolute_out = add(out, x[0:12])
-            return absolute_out, h
-        
+        # Mask input to handle nans
+        if mask is not None:
+            # Get RNN outputs
+            out, h[:,mask] = self.rnn(x[mask], h[:,mask])
+            out = self.fc(out)
+            if self.predict_delta:
+                absolute_out = add(out, x[mask,:,0:12])
+                return absolute_out, h
+        else:
+            out, h = self.rnn(x, h)
+            out = self.fc(out)
+            if self.predict_delta:
+                absolute_out = add(out, x[0:12])
+                return absolute_out, h
+
         return out, h
 
 

@@ -27,6 +27,11 @@ class DataFrameDataset(Dataset):
         return torch.tensor(input_data, dtype=torch.float32), torch.tensor(output_data, dtype=torch.float32)
 
 
+# Function to pad lists with NaNs
+def pad_list(lst, max_length):
+    return lst + [[np.nan]*15] * (max_length - len(lst))
+
+
 if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
@@ -37,6 +42,7 @@ if __name__ == "__main__":
     num_epochs = 100
     model = RNN(input_size, 256, output_size)
     model_save_path = 'models/constrained_linear_model_256.pth'
+    batch_size = 128
 
     # Load in training data
     # df = load_dataset(prediction_size=prediction_size)
@@ -52,30 +58,46 @@ if __name__ == "__main__":
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    # Testing eval
+    model_val_data = get_rnn_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=False, batch_size=batch_size)
+
     # Training loop
     torch.autograd.set_detect_anomaly(True)
     best_error = math.inf
     for epoch in range(num_epochs):
         shuffled_df = df.sample(frac=1).reset_index(drop=True)
-        for trajectory in shuffled_df['Trajectory']:
-            hidden_state = None
+        for j in range(0, len(shuffled_df), batch_size):
+            if j+batch_size in shuffled_df.index:
+                batch = shuffled_df.iloc[j:j+batch_size]
+            else:
+                batch = shuffled_df.iloc[j:-1]
+
+            max_length = batch.map(len).max().max()
+            # Apply padding function to each element in the DataFrame
+            padded_df = batch.map(lambda x: pad_list(x, max_length))
+            padded_array = np.array(padded_df.values.tolist(), dtype=np.float32)
+            trajectories = torch.tensor(padded_array, dtype=torch.float32, device='cuda').squeeze(1)
+            hidden_state = torch.zeros(1, len(batch), model.hidden_size).to('cuda')
             # Zero the parameter gradients
             optimizer.zero_grad()
-            outputs = torch.zeros((len(trajectory)-1, output_size), dtype=torch.float32, device='cuda')
-            targets = torch.zeros((len(trajectory)-1, output_size), dtype=torch.float32, device='cuda')
+            outputs = torch.zeros_like(trajectories[:,1:,0:12], dtype=torch.float32, device='cuda')
+            targets = torch.zeros_like(trajectories[:,1:,0:12], dtype=torch.float32, device='cuda')
 
-            for i in range(0, len(trajectory)-1, prediction_size):
-                model_input = torch.tensor(trajectory[i], dtype=torch.float32, device='cuda').unsqueeze(0)
-                target_output = torch.tensor(trajectory[i+1][0:12], dtype=torch.float32, device='cuda')
+            for i in range(0, trajectories.shape[1]-1):
+                model_input = trajectories[:,i:i+1,:]
+                target_output = trajectories[:,i+prediction_size:i+prediction_size+1,0:12]
+
+                # Handle NaNs
+                mask = ~torch.isnan(target_output)[:,0,0]
 
                 # Forward pass
-                output, hidden_state = model(model_input, hidden_state)
+                output, hidden_state = model(model_input, hidden_state, mask=mask)
                 if constrain_output:
                     output = apply_constraints(output)
 
                 # store outputs
-                outputs[i:i+1,:] = output
-                targets[i:i+1,:] = target_output
+                outputs[:,i:i+1,:][mask] = output
+                targets[:,i:i+1,:][mask] = target_output[mask]
 
             loss = criterion(outputs, targets)
 
@@ -84,7 +106,7 @@ if __name__ == "__main__":
             optimizer.step()
 
         # Calculate validation set error
-        model_val_data = get_rnn_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=True)
+        model_val_data = get_rnn_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=True, batch_size=batch_size, constrain_output=constrain_output)
         model.train()
         val_error = model_val_data['model_in_training']['all']['median'][0]
         if val_error < best_error:
