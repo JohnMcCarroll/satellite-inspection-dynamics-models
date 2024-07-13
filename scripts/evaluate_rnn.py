@@ -132,8 +132,8 @@ def get_rnn_eval_data(
                     for state_key, state_range in NAMED_STATE_RANGES.items():
                         errors[state_key][num_steps].append(
                             euclidean_distance(
-                                predicted_state[state_range].cpu().numpy(),
-                                actual_state[state_range].cpu().numpy()
+                                predicted_state[0][state_range].cpu().numpy(),
+                                actual_state[0][state_range].cpu().numpy()
                             )
                         )
 

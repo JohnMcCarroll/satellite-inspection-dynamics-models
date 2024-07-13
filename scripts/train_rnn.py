@@ -58,9 +58,6 @@ if __name__ == "__main__":
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    # Testing eval
-    model_val_data = get_rnn_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=False, batch_size=batch_size)
-
     # Training loop
     torch.autograd.set_detect_anomaly(True)
     best_error = math.inf
