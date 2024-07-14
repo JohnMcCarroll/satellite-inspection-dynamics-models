@@ -28,13 +28,18 @@ class DataFrameDataset(Dataset):
 if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
-    predict_delta = False  # Model's prediction of state change or absolute next state
-    constrain_output = True  # Constrain model's output to not violate environment constraints
+    predict_delta = True  # Model's prediction of state change or absolute next state
+    constrain_output = False  # Constrain model's output to not violate environment constraints
     input_size = 15  # Define input and output sizes
     output_size = 12
     num_epochs = 100
+    seed = 105
+    model_save_path = 'models/delta_nonlinear_MLP_lr0.001_bs128.pth'
+    
+    # Instantiate Model
+    torch.manual_seed(seed)
     model = NonlinearMLP(input_size, output_size, predict_delta=predict_delta)
-    model_save_path = 'models/constrained_nonlinear_model_lr0.001_bs128.pth'
+    
 
     # Load in training data
     df = load_dataset(prediction_size=prediction_size)
@@ -42,7 +47,7 @@ if __name__ == "__main__":
 
     # Create dataset and dataloader
     dataset = DataFrameDataset(df)
-    dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
     # Initialize the network, loss function, and optimizer
     criterion = nn.MSELoss()
