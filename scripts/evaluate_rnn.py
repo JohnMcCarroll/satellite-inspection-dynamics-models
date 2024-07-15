@@ -87,7 +87,7 @@ def get_rnn_eval_data(
                 # Forward pass
                 output, hidden_state = model(state_action, hidden_state, mask=mask)
                 if constrain_output:
-                    output = apply_constraints(output)
+                    apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
 
                 multistep_predictions[(i,i+prediction_size)] = output
                 target_states[(i,i+prediction_size)] = target_output[mask]
@@ -111,7 +111,7 @@ def get_rnn_eval_data(
                             # Forward pass
                             output, multistep_prediction_hidden_state = model(state_action, multistep_prediction_hidden_state[:,multistep_mask,:])
                             if constrain_output:
-                                output = apply_constraints(output)
+                                apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
 
                             # store model's prediction and ground truth target state
                             multistep_predictions[(i+prediction_size,i+prediction_size+k)] = output
