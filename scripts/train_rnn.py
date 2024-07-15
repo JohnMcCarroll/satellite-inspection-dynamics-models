@@ -36,12 +36,13 @@ if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
     predict_delta = False  # Model's prediction of state change or absolute next state
-    constrain_output = False  # Constrain model's output to not violate environment constraints
+    constrain_output = True  # Constrain model's output to not violate environment constraints
     input_size = 15  # Define input and output sizes
     output_size = 12
+    hidden_layer_size = 256
     num_epochs = 100
-    model = RNN(input_size, 256, output_size)
-    model_save_path = 'models/constrained_linear_model_256.pth'
+    model = RNN(input_size, hidden_layer_size, output_size)
+    model_save_path = 'models/constrained_rnn_model_lr0.001_bs128.pth'
     batch_size = 128
 
     # Load in training data
@@ -90,7 +91,7 @@ if __name__ == "__main__":
                 # Forward pass
                 output, hidden_state = model(model_input, hidden_state, mask=mask)
                 if constrain_output:
-                    output = apply_constraints(output)
+                    output = apply_constraints(output.view(-1,output_size), model_input[mask].view(-1,input_size)).view(-1, 1, output_size)
 
                 # store outputs
                 outputs[:,i:i+1,:][mask] = output

@@ -29,12 +29,12 @@ if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
     predict_delta = True  # Model's prediction of state change or absolute next state
-    constrain_output = False  # Constrain model's output to not violate environment constraints
+    constrain_output = True  # Constrain model's output to not violate environment constraints
     input_size = 15  # Define input and output sizes
     output_size = 12
     num_epochs = 100
     seed = 105
-    model_save_path = 'models/delta_nonlinear_MLP_lr0.001_bs128.pth'
+    model_save_path = 'models/constrained_delta_nonlinear_MLP_lr0.001_bs128.pth'
     
     # Instantiate Model
     torch.manual_seed(seed)
