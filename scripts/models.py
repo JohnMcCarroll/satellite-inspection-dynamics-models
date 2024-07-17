@@ -99,6 +99,7 @@ class RNN(nn.Module):
         
 
         # Mask input to handle nans
+        # TODO: test nonlinear transformations of output*
         if mask is not None:
             # Get RNN outputs
             out, h[:,mask] = self.rnn(x[mask], h[:,mask])

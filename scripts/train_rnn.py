@@ -35,15 +35,20 @@ def pad_list(lst, max_length):
 if __name__ == "__main__":
     # Define training configuration
     prediction_size = 1  # Define number of steps model will be trained to predict
-    predict_delta = False  # Model's prediction of state change or absolute next state
+    predict_delta = True  # Model's prediction of state change or absolute next state
     constrain_output = True  # Constrain model's output to not violate environment constraints
     input_size = 15  # Define input and output sizes
     output_size = 12
     hidden_layer_size = 256
     num_epochs = 100
-    model = RNN(input_size, hidden_layer_size, output_size)
-    model_save_path = 'models/constrained_rnn_model_lr0.001_bs128.pth'
+    seed = 105
+    
+    model_save_path = 'models/constrained_delta_rnn_model_lr0.001_bs128.pth'
     batch_size = 128
+
+    # Instantiate Model
+    torch.manual_seed(seed)
+    model = RNN(input_size, hidden_layer_size, output_size)
 
     # Load in training data
     # df = load_dataset(prediction_size=prediction_size)
