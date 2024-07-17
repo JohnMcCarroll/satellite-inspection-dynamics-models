@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset, load_sequence_dataset
-from evaluate import get_eval_data
 from evaluate_rnn import get_rnn_eval_data
 from models import MLP256, MLP1024, NonlinearMLP, RNN, apply_constraints
 import numpy as np
@@ -51,14 +50,8 @@ if __name__ == "__main__":
     model = RNN(input_size, hidden_layer_size, output_size)
 
     # Load in training data
-    # df = load_dataset(prediction_size=prediction_size)
     df = load_sequence_dataset(prediction_size=prediction_size)
     val_df = load_validation_dataset()
-
-    # Create dataset and dataloader
-    # dataset = DataFrameDataset(df)
-    # dataset = SequenceDataset(df)
-    # dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     # Initialize the network, loss function, and optimizer
     criterion = nn.MSELoss()
