@@ -11,5 +11,6 @@ for predict_delta in "${predict_deltas[@]}"; do
     for constrain_output in "${constrain_outputs[@]}"; do
         # Call the Python script with the arguments
         python scripts/train.py --predict_delta "$predict_delta" --constrain_output "$constrain_output"
+        python scripts/train_rnn.py --predict_delta "$predict_delta" --constrain_output "$constrain_output"
     done
 done
