@@ -16,8 +16,8 @@ class MLP256(nn.Module):
         self.fc3 = nn.Linear(256, output_size, device="cuda")
         self.predict_delta = predict_delta
 
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
+    def forward(self, input):
+        x = torch.relu(self.fc1(input))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
 
