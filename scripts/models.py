@@ -9,16 +9,22 @@ from torch import tanh, add, divide, sigmoid, subtract
 
 
 class MLP256(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, output_size, predict_delta=False):
         super(MLP256, self).__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, output_size)
+        self.fc1 = nn.Linear(input_size, 256, device='cuda')
+        self.fc2 = nn.Linear(256, 256, device="cuda")
+        self.fc3 = nn.Linear(256, output_size, device="cuda")
+        self.predict_delta = predict_delta
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
+
+        if self.predict_delta:
+            absolute_output = add(x, input[:,0:12])
+            return absolute_output
+
         return x
 
 
@@ -36,53 +42,6 @@ class MLP1024(nn.Module):
         return x
 
 
-class NonlinearMLP(nn.Module):
-    """
-    Linear MLP with 256-dim hidden layer.
-    This output of this model is constrained so that impossible predictions do not occur.
-    Constraints:
-    - minimum and maximum values of xyz position enforced
-    - number of inspected points can never decrease
-    - uninspected points cluster will never move towards the agent or beyond the radius of chief satellite
-    - sun angle prediction restricted to point on unit circle
-    Note: data will be normalized between [-1,1], rather than z scored.
-    """
-
-    def __init__(self, input_size, output_size, predict_delta=False):
-        super(NonlinearMLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, output_size)
-        self.predict_delta = predict_delta
-
-    def forward(self, input):
-        # Predict next state
-        # TODO: enable use of other activation functions
-        x = torch.relu(self.fc1(input))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-
-        output = x.clone()
-
-        # transform model output to state ranges
-        predicted_positions = tanh(x[:,0:3])
-        predicted_velocities = tanh(x[:,3:6])
-        predicted_inspected_points = sigmoid(x[:,6:7])
-        predicted_cluster_positions = tanh(x[:,7:10])
-        predicted_sun_angles = tanh(x[:,10:12])
-        output[:,0:3] = predicted_positions
-        output[:,3:6] = predicted_velocities
-        output[:,6:7] = predicted_inspected_points
-        output[:,7:10] = predicted_cluster_positions
-        output[:,10:12] = predicted_sun_angles
-
-        if self.predict_delta:
-            absolute_output = add(output, input[:,0:12])
-            return absolute_output
-
-        return output
-
-
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, predict_delta=False):
         super(RNN, self).__init__()
@@ -90,16 +49,14 @@ class RNN(nn.Module):
         self.rnn = nn.RNN(input_size, hidden_size, batch_first=True, device='cuda')
         self.fc = nn.Linear(hidden_size, output_size, device='cuda')
         self.predict_delta = predict_delta
+        self.h0 = nn.Parameter(torch.zeros(1, 1, self.hidden_size).to("cuda"))
     
     def forward(self, x, h=None, mask=None):
         if h is None:
-            # Initialize hidden state with zeros
-            # h = torch.zeros(1, self.hidden_size).to(x.device)
-            h = torch.zeros(1, x.size(0), self.hidden_size).to(x.device)
+            # Use learned h0
+            h = self.h0.repeat(1, x.shape[0], 1)
         
-
         # Mask input to handle nans
-        # TODO: test nonlinear transformations of output*
         if mask is not None:
             # Get RNN outputs
             out, h[:,mask] = self.rnn(x[mask], h[:,mask])
@@ -118,12 +75,12 @@ class RNN(nn.Module):
 
 
 def apply_constraints(model_output, model_input):
-    # Parse output
-    predicted_positions = model_output[:,0:3]
-    predicted_velocities = model_output[:,3:6]
-    predicted_inspected_points = model_output[:,6:7]
-    predicted_cluster_positions = model_output[:,7:10]
-    predicted_sun_angles = model_output[:,10:12]
+    # Parse output + transform model output to state ranges
+    predicted_positions = tanh(model_output[:,0:3])
+    predicted_velocities = tanh(model_output[:,3:6])
+    predicted_inspected_points = sigmoid(model_output[:,6:7])
+    predicted_cluster_positions = tanh(model_output[:,7:10])
+    predicted_sun_angles = tanh(model_output[:,10:12])
     constrained_output = model_output.clone()
 
     # Apply constraints

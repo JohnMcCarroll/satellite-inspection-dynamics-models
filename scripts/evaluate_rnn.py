@@ -4,7 +4,7 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from models import MLP256, MLP1024, NonlinearMLP, RNN, apply_constraints
+from models import RNN, apply_constraints
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
@@ -14,7 +14,6 @@ from typing import Optional
 from pathlib import Path
 from constants import NAMED_STATE_RANGES
 import pandas as pd
-
 
 
 # Calculate error between model output and target vector
@@ -166,15 +165,14 @@ def get_rnn_eval_data(
 
 if __name__ == "__main__":
     # Configure Evaluation
-    prediction_size = 1
     plot_save_path = "plots/rnn_error_by_steps.png"
     models = {
-        # model_name: (model_class, model_file_path)
-        "rnn": (RNN, 'models/rnn.pth'),
+        # model_name: model_config_file_path
+        "rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
         # "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
     }
-    input_size = 15
-    output_size = 12
+    # input_size = 15
+    # output_size = 12
     # eval_data = copy.deepcopy(models)
     # eval_name = "LinearModelSize"
 
@@ -183,9 +181,15 @@ if __name__ == "__main__":
     eval_data = {}
 
     # Evaluate model(s)
-    for model_name, model_cfg in models.items():
+    for model_name, model_cfg_path in models.items():
+        # load model from model config
+        with open(model_cfg_path, 'rb') as f:
+            model_config = pickle.load(f)
+        model_cfg = (globals()[model_config['model']], model_config['model_params'])
+        prediction_size = model_config['prediction_size']
+        constrain_output = model_config['constrain_output']
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
-        model_eval_data = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size)
+        model_eval_data = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -206,8 +210,6 @@ if __name__ == "__main__":
     fig.tight_layout()
     plt.savefig(plot_save_path)
     plt.show()
-
-
 
     # Evaluate the model
     error_by_steps = {}
