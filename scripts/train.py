@@ -12,6 +12,7 @@ from evaluate import get_eval_data
 from models import MLP256, MLP1024, apply_constraints
 import argparse
 import pickle
+import gc
 
 
 class DataFrameDataset(Dataset):
@@ -121,3 +122,8 @@ if __name__ == "__main__":
         print(f'Val Error: {val_error:.4f}, Best Val Error: {best_error:.4f}')
 
     print("Training completed.")
+
+    model.cpu()
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
