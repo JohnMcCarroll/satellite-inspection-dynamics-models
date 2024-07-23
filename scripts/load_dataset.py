@@ -10,10 +10,14 @@ import numpy as np
 
 def load_dataset(prediction_size: int = 1):
     # Load in DataFrames from file
-    ppo1_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset1.pkl")
-    ppo2_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset2.pkl")
-    ppo3_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset3.pkl")
-    ppo4_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset4.pkl")
+    ppo1_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset1.pkl")
+    ppo2_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset2.pkl")
+    ppo3_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset3.pkl")
+    ppo4_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset4.pkl")
+    # ppo1_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset1.pkl")
+    # ppo2_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset2.pkl")
+    # ppo3_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset3.pkl")
+    # ppo4_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset4.pkl")
     # random1_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset.pkl")
     # random2_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset4.pkl")
     # random3_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset3.pkl")
@@ -63,9 +67,58 @@ def load_dataset(prediction_size: int = 1):
 
     return pd.DataFrame(data_dict)
 
+def load_sequence_dataset(prediction_size: int = 1):
+    # Load in DataFrames from file
+    ppo1_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset1.pkl")
+    ppo2_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset2.pkl")
+    ppo3_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset3.pkl")
+    ppo4_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_dataset4.pkl")
+    # ppo1_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset1.pkl")
+    # ppo2_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset2.pkl")
+    # ppo3_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset3.pkl")
+    # ppo4_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_dataset4.pkl")
+    # random1_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset.pkl")
+    # random2_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset4.pkl")
+    # random3_path = os.path.join(os.path.dirname(__file__), "../datasets/random_dataset3.pkl")
+
+    with open(ppo1_path, 'rb') as file:
+        ppo1_data = pickle.load(file)
+
+    with open(ppo2_path, 'rb') as file:
+        ppo2_data = pickle.load(file)
+
+    with open(ppo3_path, 'rb') as file:
+        ppo3_data = pickle.load(file)
+
+    with open(ppo4_path, 'rb') as file:
+        ppo4_data = pickle.load(file)
+
+    # with open(random3_path, 'rb') as file:
+    #     random3_data = pickle.load(file)
+
+    datasets = [
+        ppo1_data,
+        ppo2_data,
+        ppo3_data,
+        ppo4_data,
+    ]
+
+    # Parse data
+    data_dict = {
+        "Trajectory": [],
+    }
+    for dataset in datasets:
+        for row in dataset["Trajectory"]:
+            traj = [np.concatenate((mdp[0],mdp[1])) for mdp in row]
+            data_dict['Trajectory'].append(traj)
+
+    return pd.DataFrame(data_dict)
+
+
 def load_test_dataset():
     # Load in DataFrames from file
-    test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_test_dataset.pkl")
+    test_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_test_dataset.pkl")
+    # test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_test_dataset.pkl")
 
     with open(test_path, 'rb') as file:
         test_data = pickle.load(file)
@@ -83,7 +136,8 @@ def load_test_dataset():
 
 def load_validation_dataset():
     # Load in DataFrames from file
-    test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_val_dataset.pkl")
+    test_path = os.path.join(os.path.dirname(__file__), "../datasets/normalized_ppo_val_dataset.pkl")
+    # test_path = os.path.join(os.path.dirname(__file__), "../datasets/processed_ppo_val_dataset.pkl")
 
     with open(test_path, 'rb') as file:
         test_data = pickle.load(file)
