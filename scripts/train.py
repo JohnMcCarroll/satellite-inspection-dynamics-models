@@ -13,6 +13,7 @@ from models import MLP256, MLP1024, apply_constraints
 import argparse
 import pickle
 import gc
+from utils import str2bool
 
 
 class DataFrameDataset(Dataset):
@@ -32,8 +33,8 @@ if __name__ == "__main__":
     # Parse cmd line args
     parser = argparse.ArgumentParser(description='Example script.')
     parser.add_argument('--prediction_size', type=int, default=1, help='The number of steps into the future the dynamics model will predict')
-    parser.add_argument('--predict_delta', type=bool, default=False, help='If the dynamics model will predict the change in state')
-    parser.add_argument('--constrain_output', type=bool, default=False, help="If the dynamics model's output will be constrained to only possible states")
+    parser.add_argument('--predict_delta', type=str2bool, default=False, help='If the dynamics model will predict the change in state')
+    parser.add_argument('--constrain_output', type=str2bool, default=False, help="If the dynamics model's output will be constrained to only possible states")
     parser.add_argument('--input_size', type=int, default=15, help="The size of the input vector")
     parser.add_argument('--output_size', type=int, default=12, help="The size of the output vector")
     parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs of training")
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     model_name = args.model
     model_config_save_path = f'models/{model_name}_pred_size={prediction_size}_constrained={str(constrain_output)}_delta={str(predict_delta)}_lr{learning_rate}_bs{batch_size}.pkl'
-    
+
     # Instantiate Model
     torch.manual_seed(seed)
     model = eval(model_name)(input_size, output_size, predict_delta=predict_delta)

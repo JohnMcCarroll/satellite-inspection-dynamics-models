@@ -14,6 +14,7 @@ import numpy as np
 import argparse
 import pickle
 import gc
+from utils import str2bool
 
 
 # class DataFrameDataset(Dataset):
@@ -38,8 +39,8 @@ if __name__ == "__main__":
     # Parse cmd line args
     parser = argparse.ArgumentParser(description='Example script.')
     parser.add_argument('--prediction_size', type=int, default=1, help='The number of steps into the future the dynamics model will predict')
-    parser.add_argument('--predict_delta', type=bool, default=False, help='If the dynamics model will predict the change in state')
-    parser.add_argument('--constrain_output', type=bool, default=False, help="If the dynamics model's output will be constrained to only possible states")
+    parser.add_argument('--predict_delta', type=str2bool, default=False, help='If the dynamics model will predict the change in state')
+    parser.add_argument('--constrain_output', type=str2bool, default=False, help="If the dynamics model's output will be constrained to only possible states")
     parser.add_argument('--input_size', type=int, default=15, help="The size of the input vector")
     parser.add_argument('--output_size', type=int, default=12, help="The size of the output vector")
     parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs of training")
