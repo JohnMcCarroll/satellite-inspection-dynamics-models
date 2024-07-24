@@ -74,6 +74,11 @@ if __name__ == "__main__":
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
+    # Early stopping hyperparameters
+    plateu_length = 5
+    stop_length = 15
+    steps_since_improvement = 0
+
     # Training loop
     torch.autograd.set_detect_anomaly(True)
     best_error = math.inf
@@ -102,6 +107,7 @@ if __name__ == "__main__":
         val_error = model_val_data['model_in_training']['all']['median'][0]
         if val_error < best_error:
             best_error = val_error
+            steps_since_improvement = 0
             # Save the trained model
             model_config = {
                 "model": model_name,
@@ -118,9 +124,18 @@ if __name__ == "__main__":
             }
             with open(model_config_save_path, "wb") as f:
                 pickle.dump(model_config, f)
+        else:
+            steps_since_improvement += 1
 
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
         print(f'Val Error: {val_error:.4f}, Best Val Error: {best_error:.4f}')
+
+        # Enforce Early Stopping
+        if steps_since_improvement >= stop_length:
+            break
+        if steps_since_improvement >= plateu_length:
+            learning_rate = learning_rate / 2
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     print("Training completed.")
 
