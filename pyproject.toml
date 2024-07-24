@@ -11,6 +11,7 @@ python = ">=3.10,<3.11"
 corl = "3.16.2"
 safe-autonomy-sims = "4.0.1"
 setuptools = "<70.0.0"
+torch = "1.13.0"
 
 [build-system]
 requires = ["poetry-core"]
