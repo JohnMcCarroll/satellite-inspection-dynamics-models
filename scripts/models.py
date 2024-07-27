@@ -68,7 +68,7 @@ class RNN(nn.Module):
             out, h = self.rnn(x, h)
             out = self.fc(out)
             if self.predict_delta:
-                absolute_out = add(out, x[0:12])
+                absolute_out = add(out, x[:,:,0:12])
                 return absolute_out, h
 
         return out, h
