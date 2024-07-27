@@ -54,8 +54,10 @@ def get_rnn_eval_data(
 
     # Load the trained model
     if model is None:
-        model = model_cfg[0](input_size, output_size)
-        model.load_state_dict(torch.load(model_cfg[1]))
+        # TODO: add hidden layer size (get from model config)
+        model = model_cfg[0](input_size, 256, output_size)
+        model.load_state_dict(model_cfg[1])
+        model.predict_delta = model_cfg[2]
     model.eval()
 
     with torch.no_grad():
@@ -86,7 +88,7 @@ def get_rnn_eval_data(
                 # Forward pass
                 output, hidden_state = model(state_action, hidden_state, mask=mask)
                 if constrain_output:
-                    apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
+                    output = apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
 
                 multistep_predictions[(i,i+prediction_size)] = output
                 target_states[(i,i+prediction_size)] = target_output[mask]
@@ -110,7 +112,7 @@ def get_rnn_eval_data(
                             # Forward pass
                             output, multistep_prediction_hidden_state = model(state_action, multistep_prediction_hidden_state[:,multistep_mask,:])
                             if constrain_output:
-                                apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
+                                output = apply_constraints(output.view(-1,output_size), state_action.view(-1,input_size)).view(-1, 1, output_size)
 
                             # store model's prediction and ground truth target state
                             multistep_predictions[(i+prediction_size,i+prediction_size+k)] = output
@@ -185,11 +187,11 @@ if __name__ == "__main__":
         # load model from model config
         with open(model_cfg_path, 'rb') as f:
             model_config = pickle.load(f)
-        model_cfg = (globals()[model_config['model']], model_config['model_params'])
+        model_cfg = (globals()[model_config['model']], model_config['model_params'], model_config['predict_delta'])
         prediction_size = model_config['prediction_size']
         constrain_output = model_config['constrain_output']
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
-        model_eval_data = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output)
+        model_eval_data = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output, max_steps=20)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
@@ -211,111 +213,111 @@ if __name__ == "__main__":
     plt.savefig(plot_save_path)
     plt.show()
 
-    # Evaluate the model
-    error_by_steps = {}
-    position_error_by_steps = {}
-    velocity_error_by_steps = {}
-    inspected_points_error_by_steps = {}
-    uninspected_points_error_by_steps = {}
-    sun_angle_error_by_steps = {}
+    # # Evaluate the model
+    # error_by_steps = {}
+    # position_error_by_steps = {}
+    # velocity_error_by_steps = {}
+    # inspected_points_error_by_steps = {}
+    # uninspected_points_error_by_steps = {}
+    # sun_angle_error_by_steps = {}
 
-    with torch.no_grad():
-        for trajectory in test_df['Trajectory']:
-            # Create multistep predictions for each trajectory in test dataset
-            i = 0
-            final_state_index = len(trajectory)-1
-            multistep_predictions = {}
-            target_states = {}
-            # final_state = trajectory[final_state_index][0:11]
-            while i < final_state_index:
-                # predicted_trajectory = []
-                state_action = torch.tensor(trajectory[i], dtype=torch.float32)
-                future_actions = [state_action[-3:] for state_action in trajectory[i+1:final_state_index]]
+    # with torch.no_grad():
+    #     for trajectory in test_df['Trajectory']:
+    #         # Create multistep predictions for each trajectory in test dataset
+    #         i = 0
+    #         final_state_index = len(trajectory)-1
+    #         multistep_predictions = {}
+    #         target_states = {}
+    #         # final_state = trajectory[final_state_index][0:11]
+    #         while i < final_state_index:
+    #             # predicted_trajectory = []
+    #             state_action = torch.tensor(trajectory[i], dtype=torch.float32)
+    #             future_actions = [state_action[-3:] for state_action in trajectory[i+1:final_state_index]]
 
-                n = final_state_index - i
-                for k in range(n):
-                    if k > 49:
-                        # Model error compounds exponentially, don't waste compute on long range
-                        break
-                    # Use the model to predict n steps into the future
-                    # Where n is the number of timesteps between the input and target output in the trajectory
-                    predicted_state = model(state_action)
-                    # store model's prediction and ground truth target state
-                    multistep_predictions[(i,i+k+1)] = predicted_state
-                    target_states[(i,i+k+1)] = trajectory[i+k+1][0:12]
-                    # Concatentate model's predicted state with next taken action
-                    if k < n - 1:
-                        state_action = torch.tensor(np.concatenate((predicted_state,future_actions[k])), dtype=torch.float32)
-                i += 1
-            for k,v in multistep_predictions.items():
-                num_steps = k[1]-k[0]
-                output = v.numpy()
-                total_dist = euclidean_distance(output, target_states[k])
-                position_dist = euclidean_distance(output[0:3], target_states[k][0:3])
-                velocity_dist = euclidean_distance(output[3:6], target_states[k][3:6])
-                inspected_points_dist = euclidean_distance(output[6], target_states[k][6])
-                uninspected_pointstotal_dist = euclidean_distance(output[7:10], target_states[k][7:10])
-                sun_angle_dist = euclidean_distance(output[10:], target_states[k][10:])
-                if num_steps in error_by_steps:
-                    error_by_steps[num_steps].append(total_dist)
-                    position_error_by_steps[num_steps].append(position_dist)
-                    velocity_error_by_steps[num_steps].append(velocity_dist)
-                    inspected_points_error_by_steps[num_steps].append(inspected_points_dist)
-                    uninspected_points_error_by_steps[num_steps].append(uninspected_pointstotal_dist)
-                    sun_angle_error_by_steps[num_steps].append(sun_angle_dist)
-                else:
-                    error_by_steps[num_steps] = [total_dist]
-                    position_error_by_steps[num_steps] = [position_dist]
-                    velocity_error_by_steps[num_steps] = [velocity_dist]
-                    inspected_points_error_by_steps[num_steps] = [inspected_points_dist]
-                    uninspected_points_error_by_steps[num_steps] = [uninspected_pointstotal_dist]
-                    sun_angle_error_by_steps[num_steps] = [sun_angle_dist]
+    #             n = final_state_index - i
+    #             for k in range(n):
+    #                 if k > 49:
+    #                     # Model error compounds exponentially, don't waste compute on long range
+    #                     break
+    #                 # Use the model to predict n steps into the future
+    #                 # Where n is the number of timesteps between the input and target output in the trajectory
+    #                 predicted_state = model(state_action)
+    #                 # store model's prediction and ground truth target state
+    #                 multistep_predictions[(i,i+k+1)] = predicted_state
+    #                 target_states[(i,i+k+1)] = trajectory[i+k+1][0:12]
+    #                 # Concatentate model's predicted state with next taken action
+    #                 if k < n - 1:
+    #                     state_action = torch.tensor(np.concatenate((predicted_state,future_actions[k])), dtype=torch.float32)
+    #             i += 1
+    #         for k,v in multistep_predictions.items():
+    #             num_steps = k[1]-k[0]
+    #             output = v.numpy()
+    #             total_dist = euclidean_distance(output, target_states[k])
+    #             position_dist = euclidean_distance(output[0:3], target_states[k][0:3])
+    #             velocity_dist = euclidean_distance(output[3:6], target_states[k][3:6])
+    #             inspected_points_dist = euclidean_distance(output[6], target_states[k][6])
+    #             uninspected_pointstotal_dist = euclidean_distance(output[7:10], target_states[k][7:10])
+    #             sun_angle_dist = euclidean_distance(output[10:], target_states[k][10:])
+    #             if num_steps in error_by_steps:
+    #                 error_by_steps[num_steps].append(total_dist)
+    #                 position_error_by_steps[num_steps].append(position_dist)
+    #                 velocity_error_by_steps[num_steps].append(velocity_dist)
+    #                 inspected_points_error_by_steps[num_steps].append(inspected_points_dist)
+    #                 uninspected_points_error_by_steps[num_steps].append(uninspected_pointstotal_dist)
+    #                 sun_angle_error_by_steps[num_steps].append(sun_angle_dist)
+    #             else:
+    #                 error_by_steps[num_steps] = [total_dist]
+    #                 position_error_by_steps[num_steps] = [position_dist]
+    #                 velocity_error_by_steps[num_steps] = [velocity_dist]
+    #                 inspected_points_error_by_steps[num_steps] = [inspected_points_dist]
+    #                 uninspected_points_error_by_steps[num_steps] = [uninspected_pointstotal_dist]
+    #                 sun_angle_error_by_steps[num_steps] = [sun_angle_dist]
 
-    # Calculate the mean and standard deviation
-    steps = []
-    means = []
-    std_devs = []
-    position_means = []
-    position_std_devs = []
-    velocity_means = []
-    velocity_std_devs = []
-    inspected_points_means = []
-    inspected_points_std_devs = []
-    uninspected_points_means = []
-    uninspected_points_std_devs = []
-    sun_angle_means = []
-    sun_angle_std_devs = []
-    for i in range(1, len(error_by_steps)):
-        means.append(np.mean(error_by_steps[i]))
-        std_devs.append(np.std(error_by_steps[i]))
-        steps.append(i)
-        position_means.append(np.mean(position_error_by_steps[i]))
-        position_std_devs.append(np.std(position_error_by_steps[i]))
-        velocity_means.append(np.mean(velocity_error_by_steps[i]))
-        velocity_std_devs.append(np.std(velocity_error_by_steps[i]))
-        inspected_points_means.append(np.mean(inspected_points_error_by_steps[i]))
-        inspected_points_std_devs.append(np.std(inspected_points_error_by_steps[i]))
-        uninspected_points_means.append(np.mean(uninspected_points_error_by_steps[i]))
-        uninspected_points_std_devs.append(np.std(uninspected_points_error_by_steps[i]))
-        sun_angle_means.append(np.mean(sun_angle_error_by_steps[i]))
-        sun_angle_std_devs.append(np.std(sun_angle_error_by_steps[i]))
+    # # Calculate the mean and standard deviation
+    # steps = []
+    # means = []
+    # std_devs = []
+    # position_means = []
+    # position_std_devs = []
+    # velocity_means = []
+    # velocity_std_devs = []
+    # inspected_points_means = []
+    # inspected_points_std_devs = []
+    # uninspected_points_means = []
+    # uninspected_points_std_devs = []
+    # sun_angle_means = []
+    # sun_angle_std_devs = []
+    # for i in range(1, len(error_by_steps)):
+    #     means.append(np.mean(error_by_steps[i]))
+    #     std_devs.append(np.std(error_by_steps[i]))
+    #     steps.append(i)
+    #     position_means.append(np.mean(position_error_by_steps[i]))
+    #     position_std_devs.append(np.std(position_error_by_steps[i]))
+    #     velocity_means.append(np.mean(velocity_error_by_steps[i]))
+    #     velocity_std_devs.append(np.std(velocity_error_by_steps[i]))
+    #     inspected_points_means.append(np.mean(inspected_points_error_by_steps[i]))
+    #     inspected_points_std_devs.append(np.std(inspected_points_error_by_steps[i]))
+    #     uninspected_points_means.append(np.mean(uninspected_points_error_by_steps[i]))
+    #     uninspected_points_std_devs.append(np.std(uninspected_points_error_by_steps[i]))
+    #     sun_angle_means.append(np.mean(sun_angle_error_by_steps[i]))
+    #     sun_angle_std_devs.append(np.std(sun_angle_error_by_steps[i]))
 
-    # Store eval results
-    eval_data[model_name] = {
-        "steps": steps,
-        "means": means,
-        "std_devs": std_devs,
-        "position_means": position_means,
-        "position_std_devs": position_std_devs,
-        "velocity_means": velocity_means,
-        "velocity_std_devs": velocity_std_devs,
-        "inspected_points_means": inspected_points_means,
-        "inspected_points_std_devs": inspected_points_std_devs,
-        "uninspected_points_means": uninspected_points_means,
-        "uninspected_points_std_devs": uninspected_points_std_devs,
-        "sun_angle_means": sun_angle_means,
-        "sun_angle_std_devs": sun_angle_std_devs,
-    }
+    # # Store eval results
+    # eval_data[model_name] = {
+    #     "steps": steps,
+    #     "means": means,
+    #     "std_devs": std_devs,
+    #     "position_means": position_means,
+    #     "position_std_devs": position_std_devs,
+    #     "velocity_means": velocity_means,
+    #     "velocity_std_devs": velocity_std_devs,
+    #     "inspected_points_means": inspected_points_means,
+    #     "inspected_points_std_devs": inspected_points_std_devs,
+    #     "uninspected_points_means": uninspected_points_means,
+    #     "uninspected_points_std_devs": uninspected_points_std_devs,
+    #     "sun_angle_means": sun_angle_means,
+    #     "sun_angle_std_devs": sun_angle_std_devs,
+    # }
 
 # # Save out eval data
 # pickle.dump(eval_data, open(f'data/{eval_name}_eval_data.pkl', 'wb'))

@@ -48,6 +48,7 @@ def get_eval_data(
     if model is None:
         model = model_cfg[0](input_size, output_size)
         model.load_state_dict(model_cfg[1])
+        model.predict_delta = model_cfg[2]
     model.eval()
 
     with torch.no_grad():
@@ -129,12 +130,12 @@ if __name__ == "__main__":
         # load model from model config
         with open(model_cfg_path, 'rb') as f:
             model_config = pickle.load(f)
-        model_cfg = (globals()[model_config['model']], model_config['model_params'])
+        model_cfg = (globals()[model_config['model']], model_config['model_params'], model_config['predict_delta'])
         prediction_size = model_config['prediction_size']
         constrain_output = model_config['constrain_output']
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data_TEST.pkl"
         # eval_save_file = None
-        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output)
+        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=20)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
