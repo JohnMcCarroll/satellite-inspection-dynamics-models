@@ -134,7 +134,7 @@ if __name__ == "__main__":
         constrain_output = model_config['constrain_output']
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data_TEST.pkl"
         # eval_save_file = None
-        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output)
+        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=20)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
