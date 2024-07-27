@@ -70,14 +70,15 @@ if __name__ == "__main__":
     dataset = DataFrameDataset(df)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    # Initialize the network, loss function, and optimizer
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-
     # Early stopping hyperparameters
     plateu_length = 5
     stop_length = 15
     steps_since_improvement = 0
+
+    # Initialize the network, loss function, and optimizer
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, factor=0.5, patience=plateu_length)
 
     # Training loop
     torch.autograd.set_detect_anomaly(True)
@@ -105,6 +106,9 @@ if __name__ == "__main__":
         model_val_data = get_eval_data(val_df, "model_in_training", (), model=model, prediction_size=prediction_size, save_data=False, validation=True)
         model.train()
         val_error = model_val_data['model_in_training']['all']['median'][0]
+        # Step the LR scheduler
+        scheduler.step(val_error)
+
         if val_error < best_error:
             best_error = val_error
             steps_since_improvement = 0
@@ -133,12 +137,10 @@ if __name__ == "__main__":
         # Enforce Early Stopping
         if steps_since_improvement >= stop_length:
             break
-        if steps_since_improvement >= plateu_length:
-            learning_rate = learning_rate / 2
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     print("Training completed.")
 
+    # Memory clean up to avoid OOM errors
     model.cpu()
     del model
     gc.collect()
