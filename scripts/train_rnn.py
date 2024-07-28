@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     # Instantiate Model
     torch.manual_seed(seed)
-    model = eval(model_name)(input_size, hidden_layer_size, output_size)
+    model = eval(model_name)(input_size, hidden_layer_size, output_size, predict_delta=predict_delta)
 
     # Load in training data
     df = load_sequence_dataset(prediction_size=prediction_size)
