@@ -4,7 +4,7 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from models import MLP256, MLP1024, apply_constraints
+from models import MLP256, apply_constraints
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle

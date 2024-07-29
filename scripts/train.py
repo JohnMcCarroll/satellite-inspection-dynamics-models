@@ -9,11 +9,39 @@ import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset
 from evaluate import get_eval_data
-from models import MLP256, MLP1024, apply_constraints
+from models import MLP256, ProbMLP, apply_constraints
 import argparse
 import pickle
 import gc
 from utils import str2bool
+
+
+def log_prob(targets, outputs):
+    # parse outputs
+    d = outputs.shape[-1]
+    split_index = int(d/2)
+    means = outputs[:,0:split_index]
+    log_var = outputs[:,split_index:d]
+
+    # calculate negative log prob of targets in outputs distributions
+    diff = targets-means
+    precision = torch.exp(-log_var)
+    quadratic_term = -(0.5)*torch.sum(diff**2 * precision, dim=1)
+    log_det_cov = torch.sum(log_var, dim=1)
+    const_term = -0.5 * targets.shape[-1] * torch.log(torch.tensor([2 * torch.pi], device=log_var.device))
+
+    log_probs = const_term - 0.5 * log_det_cov + quadratic_term
+
+    # # torch sanity check
+    # variances = torch.exp(log_var)
+    # cov_matrices = torch.diag_embed(variances)
+    # multivariate_normal_dists = torch.distributions.MultivariateNormal(loc=means, covariance_matrix=cov_matrices)
+    # torch_log_probs = multivariate_normal_dists.log_prob(targets)
+
+    # sum and negate for optimization
+    log_probs_sum = -torch.sum(log_probs)
+
+    return log_probs_sum
 
 
 class DataFrameDataset(Dataset):
@@ -96,7 +124,10 @@ if __name__ == "__main__":
             if constrain_output:
                 outputs = apply_constraints(outputs, inputs)
 
-            loss = criterion(outputs.squeeze(), targets)
+            if isinstance(model, ProbMLP):
+                loss = -log_prob(targets,outputs)
+            else:
+                loss = criterion(outputs.squeeze(), targets)
 
             # Backward pass and optimize
             loss.backward()
