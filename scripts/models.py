@@ -104,15 +104,15 @@ class ProbRNN(nn.Module):
             out, h[:,mask] = self.rnn(x[mask], h[:,mask])
             out = self.fc(out)
             if self.predict_delta:
-                absolute_means = add(out[:,0:12], x[mask,:,0:12])
-                absolute_out = torch.cat((absolute_means, out[:,12:24]), dim=1)
+                absolute_means = add(out[:,:,0:12], x[mask,:,0:12])
+                absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
                 return absolute_out, h
         else:
             out, h = self.rnn(x, h)
             out = self.fc(out)
             if self.predict_delta:
-                absolute_out = add(out[:,0:12], x[:,:,0:12])
-                absolute_out = torch.cat((absolute_means, out[:,12:24]), dim=1)
+                absolute_out = add(out[:,:,0:12], x[:,:,0:12])
+                absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
                 return absolute_out, h
 
         return out, h

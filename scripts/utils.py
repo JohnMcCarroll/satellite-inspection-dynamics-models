@@ -13,7 +13,18 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 # Function to calculate the log probability given a probabilistic network's (mean + log variance) output
-def log_prob(targets, outputs):
+def log_prob(targets, outputs, num_means=12, num_log_vars=12):
+    # handle rnn batches
+    if len(outputs.shape) > 2:
+        # compress batch and trajectory dimensions
+        outputs = outputs.view(-1, num_means+num_log_vars)
+        targets = targets.view(-1, num_means)
+        # remove zeroes (steps where no prediction was made)
+        non_zero_mask = torch.any(targets != 0, dim=1)
+        # Use the mask to filter out zero rows
+        targets = targets[non_zero_mask]
+        outputs = outputs[non_zero_mask]
+
     # parse outputs
     d = outputs.shape[-1]
     split_index = int(d/2)

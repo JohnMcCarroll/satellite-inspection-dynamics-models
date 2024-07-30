@@ -9,12 +9,12 @@ import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset, load_sequence_dataset
 from evaluate_rnn import get_rnn_eval_data
-from models import RNN, apply_constraints
+from models import RNN, ProbRNN, apply_constraints
 import numpy as np
 import argparse
 import pickle
 import gc
-from utils import str2bool
+from utils import str2bool, log_prob
 
 
 # class DataFrameDataset(Dataset):
@@ -103,8 +103,12 @@ if __name__ == "__main__":
             hidden_state = None
             # Zero the parameter gradients
             optimizer.zero_grad()
-            outputs = torch.zeros_like(trajectories[:,1:,0:12], dtype=torch.float32, device='cuda')
-            targets = torch.zeros_like(trajectories[:,1:,0:12], dtype=torch.float32, device='cuda')
+            if isinstance(model, ProbRNN):
+                final_layer_size = output_size*2
+            else:
+                final_layer_size = output_size
+            outputs = torch.zeros((trajectories.shape[0], trajectories.shape[1]-1, final_layer_size), dtype=torch.float32, device='cuda')
+            targets = torch.zeros((trajectories.shape[0], trajectories.shape[1]-1, output_size), dtype=torch.float32, device='cuda')
 
             for i in range(0, trajectories.shape[1]-1):
                 model_input = trajectories[:,i:i+1,:]
@@ -122,7 +126,10 @@ if __name__ == "__main__":
                 outputs[:,i:i+1,:][mask] = output
                 targets[:,i:i+1,:][mask] = target_output[mask]
 
-            loss = criterion(outputs, targets)
+            if isinstance(model, ProbRNN):
+                loss = log_prob(targets, outputs)
+            else:
+                loss = criterion(outputs, targets)
 
             # Backward pass and optimize
             loss.backward()
