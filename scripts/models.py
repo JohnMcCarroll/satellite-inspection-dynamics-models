@@ -77,7 +77,7 @@ class ProbMLP(nn.Module):
 
         if self.predict_delta:
             absolute_means = add(x[:,0:12], input[:,0:12])
-            absolute_output = torch.cat(absolute_means, x[:,12:24], dim=1)
+            absolute_output = torch.cat((absolute_means, x[:,12:24]), dim=1)
             return absolute_output
 
         return x
@@ -105,14 +105,14 @@ class ProbRNN(nn.Module):
             out = self.fc(out)
             if self.predict_delta:
                 absolute_means = add(out[:,0:12], x[mask,:,0:12])
-                absolute_out = torch.cat(absolute_means, out[:,12:24], dim=1)
+                absolute_out = torch.cat((absolute_means, out[:,12:24]), dim=1)
                 return absolute_out, h
         else:
             out, h = self.rnn(x, h)
             out = self.fc(out)
             if self.predict_delta:
                 absolute_out = add(out[:,0:12], x[:,:,0:12])
-                absolute_out = torch.cat(absolute_means, out[:,12:24], dim=1)
+                absolute_out = torch.cat((absolute_means, out[:,12:24]), dim=1)
                 return absolute_out, h
 
         return out, h
