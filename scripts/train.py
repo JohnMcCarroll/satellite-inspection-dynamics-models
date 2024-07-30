@@ -9,11 +9,11 @@ import torch.optim as optim
 import math
 from load_dataset import load_dataset, load_validation_dataset
 from evaluate import get_eval_data
-from models import MLP256, MLP1024, apply_constraints
+from models import MLP256, ProbMLP, apply_constraints
 import argparse
 import pickle
 import gc
-from utils import str2bool
+from utils import str2bool, log_prob
 
 
 class DataFrameDataset(Dataset):
@@ -96,7 +96,12 @@ if __name__ == "__main__":
             if constrain_output:
                 outputs = apply_constraints(outputs, inputs)
 
-            loss = criterion(outputs.squeeze(), targets)
+            if isinstance(model, ProbMLP):
+                # Log liklihood loss function for probabilistic models
+                loss = log_prob(targets,outputs)
+            else:
+                # MSE loss function for deterministic models
+                loss = criterion(outputs.squeeze(), targets)
 
             # Backward pass and optimize
             loss.backward()

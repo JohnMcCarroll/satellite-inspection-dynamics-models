@@ -4,7 +4,7 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from models import RNN, apply_constraints
+from models import RNN, ProbRNN, apply_constraints
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
@@ -60,6 +60,10 @@ def get_rnn_eval_data(
         model.predict_delta = model_cfg[2]
     model.eval()
 
+    is_probabilistic = False
+    if isinstance(model, ProbRNN):
+        is_probabilistic = True
+
     with torch.no_grad():
         for j in range(0, len(test_df), batch_size):
             if j+batch_size in test_df.index:
@@ -87,6 +91,18 @@ def get_rnn_eval_data(
 
                 # Forward pass
                 output, hidden_state = model(state_action, hidden_state, mask=mask)
+
+                # Sample distributions (for probabilistic models only)
+                if is_probabilistic:
+                    means = output[:, :, :12]
+                    log_vars = output[:, :, 12:]
+                    # Convert log variances to standard deviations
+                    std_devs = torch.exp(0.5 * log_vars)
+                    # Create multivariate normal distributions
+                    mvn = torch.distributions.Normal(loc=means, scale=std_devs)
+                    # Sample from each distribution
+                    output = mvn.sample()
+
                 if constrain_output:
                     output = apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
 
@@ -111,6 +127,18 @@ def get_rnn_eval_data(
                             state_action = torch.concatenate((output[multistep_mask],multistep_actions[multistep_mask,k+i+prediction_size:k+i+prediction_size+1,:]), dim=2)
                             # Forward pass
                             output, multistep_prediction_hidden_state = model(state_action, multistep_prediction_hidden_state[:,multistep_mask,:])
+
+                            # Sample distributions (for probabilistic models only)
+                            if is_probabilistic:
+                                means = output[:, :, :12]
+                                log_vars = output[:, :, 12:]
+                                # Convert log variances to standard deviations
+                                std_devs = torch.exp(0.5 * log_vars)
+                                # Create multivariate normal distributions
+                                mvn = torch.distributions.Normal(loc=means, scale=std_devs)
+                                # Sample from each distribution
+                                output = mvn.sample()
+
                             if constrain_output:
                                 output = apply_constraints(output.view(-1,output_size), state_action.view(-1,input_size)).view(-1, 1, output_size)
 

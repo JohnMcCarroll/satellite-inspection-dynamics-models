@@ -4,7 +4,7 @@ This script evaluates the model's prediction accuracy as a function of timesteps
 import numpy as np
 import torch
 from load_dataset import load_test_dataset
-from models import MLP256, MLP1024, apply_constraints
+from models import MLP256, ProbMLP, apply_constraints
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
@@ -51,6 +51,10 @@ def get_eval_data(
         model.predict_delta = model_cfg[2]
     model.eval()
 
+    is_probabilistic = False
+    if isinstance(model, ProbMLP):
+        is_probabilistic = True
+
     with torch.no_grad():
         for trajectory_idx, trajectory in enumerate(test_df['Trajectory']):
             # Create multistep predictions for each trajectory in test dataset
@@ -65,6 +69,16 @@ def get_eval_data(
                     break
                 # Compute next prediction step
                 predicted_states = model(state_actions)
+                # Sample distributions (for probabilistic models only)
+                if is_probabilistic:
+                    means = predicted_states[:, :12]
+                    log_vars = predicted_states[:, 12:]
+                    # Convert log variances to standard deviations
+                    std_devs = torch.exp(0.5 * log_vars)
+                    # Create multivariate normal distributions
+                    mvn = torch.distributions.Normal(loc=means, scale=std_devs)
+                    # Sample from each distribution
+                    predicted_states = mvn.sample()
                 if constrain_output:
                     predicted_states = apply_constraints(predicted_states, state_actions)
                 predicted_states = predicted_states[0:final_state_index - delta_t]

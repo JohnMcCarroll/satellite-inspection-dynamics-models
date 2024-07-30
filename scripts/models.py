@@ -28,20 +28,6 @@ class MLP256(nn.Module):
         return x
 
 
-class MLP1024(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(MLP1024, self).__init__()
-        self.fc1 = nn.Linear(input_size, 1024)
-        self.fc2 = nn.Linear(1024, 1024)
-        self.fc3 = nn.Linear(1024, output_size)
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, predict_delta=False):
         super(RNN, self).__init__()
@@ -69,6 +55,64 @@ class RNN(nn.Module):
             out = self.fc(out)
             if self.predict_delta:
                 absolute_out = add(out, x[:,:,0:12])
+                return absolute_out, h
+
+        return out, h
+
+
+class ProbMLP(nn.Module):
+    def __init__(self, input_size, output_size, predict_delta=False):
+        super(ProbMLP, self).__init__()
+        # double output size: (mean, log(sigma)) for each output variable
+        output_size = output_size*2
+        self.fc1 = nn.Linear(input_size, 256, device='cuda')
+        self.fc2 = nn.Linear(256, 256, device='cuda')
+        self.fc3 = nn.Linear(256, output_size, device='cuda')
+        self.predict_delta = predict_delta
+
+    def forward(self, input):
+        x = torch.relu(self.fc1(input))
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
+
+        if self.predict_delta:
+            absolute_means = add(x[:,0:12], input[:,0:12])
+            absolute_output = torch.cat((absolute_means, x[:,12:24]), dim=1)
+            return absolute_output
+
+        return x
+
+
+class ProbRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, predict_delta=False):
+        super(ProbRNN, self).__init__()
+        output_size = output_size*2
+        self.hidden_size = hidden_size
+        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True, device='cuda')
+        self.fc = nn.Linear(hidden_size, output_size, device='cuda')
+        self.predict_delta = predict_delta
+        self.h0 = nn.Parameter(torch.zeros(1, 1, self.hidden_size).to("cuda"))
+    
+    def forward(self, x, h=None, mask=None):
+        if h is None:
+            # Use learned h0
+            h = self.h0.repeat(1, x.shape[0], 1)
+        
+        # Mask input to handle nans
+        if mask is not None:
+            # Get RNN outputs
+            out, h[:,mask] = self.rnn(x[mask], h[:,mask])
+            out = self.fc(out)
+            if self.predict_delta:
+                absolute_means = add(out[:,:,0:12], x[mask,:,0:12])
+                absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
+                return absolute_out, h
+        else:
+            out, h = self.rnn(x, h)
+            out = self.fc(out)
+            if self.predict_delta:
+                absolute_out = add(out[:,:,0:12], x[:,:,0:12])
+                absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
                 return absolute_out, h
 
         return out, h
