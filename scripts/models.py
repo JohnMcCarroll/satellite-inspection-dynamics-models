@@ -119,7 +119,7 @@ class ProbRNN(nn.Module):
             out[:,:,12:24] = 10 * torch.tanh(out[:,:,12:24])
 
             if self.predict_delta:
-                absolute_out = add(out[:,:,0:12], x[:,:,0:12])
+                absolute_means = add(out[:,:,0:12], x[:,:,0:12])
                 absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
                 return absolute_out, h
 
