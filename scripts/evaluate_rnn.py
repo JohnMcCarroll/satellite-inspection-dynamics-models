@@ -69,6 +69,8 @@ def get_rnn_eval_data(
             if j+batch_size in test_df.index:
                 batch = test_df.iloc[j:j+batch_size]
             else:
+                if j >= len(test_df)-1:
+                    break
                 batch = test_df.iloc[j:-1]
             max_length = batch.map(len).max().max()
             # Apply padding function to each element in the DataFrame

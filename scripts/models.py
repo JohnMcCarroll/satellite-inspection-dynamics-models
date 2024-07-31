@@ -74,6 +74,8 @@ class ProbMLP(nn.Module):
         x = torch.relu(self.fc1(input))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
+        # Constrain log variances to [-10,10]
+        x[:,12:24] = 10 * torch.tanh(x[:,12:24])
 
         if self.predict_delta:
             absolute_means = add(x[:,0:12], input[:,0:12])
@@ -103,6 +105,9 @@ class ProbRNN(nn.Module):
             # Get RNN outputs
             out, h[:,mask] = self.rnn(x[mask], h[:,mask])
             out = self.fc(out)
+            # Constrain log variances to [-10,10]
+            out[:,:,12:24] = 10 * torch.tanh(out[:,:,12:24])
+
             if self.predict_delta:
                 absolute_means = add(out[:,:,0:12], x[mask,:,0:12])
                 absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
@@ -110,6 +115,9 @@ class ProbRNN(nn.Module):
         else:
             out, h = self.rnn(x, h)
             out = self.fc(out)
+            # Constrain log variances to [-10,10]
+            out[:,:,12:24] = 10 * torch.tanh(out[:,:,12:24])
+
             if self.predict_delta:
                 absolute_out = add(out[:,:,0:12], x[:,:,0:12])
                 absolute_out = torch.cat((absolute_means, out[:,:,12:24]), dim=2)
