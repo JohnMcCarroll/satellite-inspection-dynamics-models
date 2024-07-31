@@ -93,6 +93,8 @@ if __name__ == "__main__":
             if j+batch_size in shuffled_df.index:
                 batch = shuffled_df.iloc[j:j+batch_size]
             else:
+                if j >= len(shuffled_df)-1:
+                    break
                 batch = shuffled_df.iloc[j:-1]
 
             max_length = batch.map(len).max().max()
@@ -141,7 +143,7 @@ if __name__ == "__main__":
         val_error = model_val_data['model_in_training']['all']['median'][0]
         # Step the LR scheduler
         scheduler.step(val_error)
-        
+
         if val_error < best_error:
             best_error = val_error
             steps_since_improvement = 0
