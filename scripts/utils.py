@@ -34,11 +34,11 @@ def log_prob(targets, outputs, num_means=12, num_log_vars=12):
     # calculate negative log prob of targets in outputs distributions
     diff = targets-means
     precision = torch.exp(-log_var)
-    quadratic_term = -(0.5)*torch.sum(diff**2 * precision, dim=1)
+    quadratic_term = torch.sum(diff**2 * precision, dim=1)
     log_det_cov = torch.sum(log_var, dim=1)
     const_term = -0.5 * targets.shape[-1] * torch.log(torch.tensor([2 * torch.pi], device=log_var.device))
 
-    log_probs = const_term - 0.5 * log_det_cov + quadratic_term
+    log_probs = const_term - 0.5 * log_det_cov -(0.5)*quadratic_term
 
     # # torch sanity check
     # variances = torch.exp(log_var)
@@ -51,10 +51,9 @@ def log_prob(targets, outputs, num_means=12, num_log_vars=12):
 
     return negative_log_probs_sum
 
-
 # Function to calculate the log probability given a deterministic network's output,
 # for comparison to probabilistic models.
-def log_gaussian_prob(targets, outputs):
+def log_gaussian_prob(targets, outputs, mse):
     # handle rnn batches
     if len(outputs.shape) > 2:
         # compress batch and trajectory dimensions
@@ -66,25 +65,17 @@ def log_gaussian_prob(targets, outputs):
         targets = targets[non_zero_mask]
         outputs = outputs[non_zero_mask]
 
-    # calculate MSE
-
-    mse = torch.mean(torch.subtract(outputs, targets)**2)
-    log_var = torch.log(mse * torch.ones(targets.shape[-1], device=mse.device)).unsqueeze(0)
+    # calculate log_var
+    log_var = torch.log(mse * torch.ones(targets.shape[-1], device=targets.device)).unsqueeze(0)
 
     # calculate negative log prob of targets in outputs distributions
     diff = targets-outputs
     precision = torch.exp(-log_var)
-    quadratic_term = -(0.5)*torch.sum(diff**2 * precision, dim=1)
+    quadratic_term = torch.sum(diff**2 * precision, dim=1)
     log_det_cov = torch.sum(log_var, dim=1)
     const_term = -0.5 * targets.shape[-1] * torch.log(torch.tensor([2 * torch.pi], device=log_var.device))
 
-    log_probs = const_term - 0.5 * log_det_cov + quadratic_term
-
-    # # torch sanity check
-    # variances = torch.exp(log_var)
-    # cov_matrices = torch.diag_embed(variances)
-    # multivariate_normal_dists = torch.distributions.MultivariateNormal(loc=means, covariance_matrix=cov_matrices)
-    # torch_log_probs = multivariate_normal_dists.log_prob(targets)
+    log_probs = const_term - 0.5 * log_det_cov -(0.5)*quadratic_term
 
     # sum and negate for optimization
     negative_log_probs_sum = -torch.sum(log_probs)

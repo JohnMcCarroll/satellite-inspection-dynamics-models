@@ -31,7 +31,8 @@ def get_eval_data(
         save_data: bool = True,
         validation: bool = False,
         constrain_output: bool = False,
-        log_prob_error: bool = False
+        log_prob_error: bool = False,
+        mean_errors: dict = None
     ):
     """
     Collects multistep prediction error of given model or loads evaluation data from file.
@@ -59,6 +60,10 @@ def get_eval_data(
 
     with torch.no_grad():
         for trajectory_idx, trajectory in enumerate(test_df['Trajectory']):
+            # TESTING
+            if trajectory_idx > 1:
+                break
+
             # Create multistep predictions for each trajectory in test dataset
             final_state_index = len(trajectory)
             state_actions = torch.from_numpy(np.stack(np.array(trajectory))).to(torch.float32).to('cuda')
@@ -70,46 +75,52 @@ def get_eval_data(
                     # Stop, if we are predicting past max_steps
                     break
                 # Compute next prediction step
-                predicted_states = model(state_actions)
+                predictions = model(state_actions)
                 # Sample distributions (for probabilistic models only)
                 if is_probabilistic:
-                    means = predicted_states[:, :12]
-                    log_vars = predicted_states[:, 12:]
+                    means = predictions[:, :12]
+                    log_vars = predictions[:, 12:]
                     # Convert log variances to standard deviations
                     std_devs = torch.exp(0.5 * log_vars)
                     # Create multivariate normal distributions
                     mvn = torch.distributions.Normal(loc=means, scale=std_devs)
                     # Sample from each distribution
                     predicted_states = mvn.sample()
+                else:
+                    predicted_states = predictions
                 if constrain_output:
-                    predicted_states = apply_constraints(predicted_states, state_actions)
+                    predictions = apply_constraints(predictions, state_actions)
+                predictions = predictions[0:final_state_index - delta_t]
                 predicted_states = predicted_states[0:final_state_index - delta_t]
                 state_actions = torch.concat((predicted_states, state_actions[0:final_state_index-delta_t,output_size:input_size]), dim=1).to('cuda')
                 # Compute and store error
                 for i in range(0,final_state_index - delta_t + 1):
                     # Iterate through predictions tensor (contains all predictions of depth `delta_t`)
-                    if i >= predicted_states.shape[0]:
+                    if i >= predictions.shape[0]:
                         # Size of predictions within scope of trajectory decreases each delta_t increment
                         break
                     for state_key, state_range in NAMED_STATE_RANGES.items():
                         if log_prob_error and is_probabilistic:
+                            log_var_slice = slice(state_range.start + 12, state_range.stop + 12)
+                            output = torch.concat((predictions[i][state_range].unsqueeze(0), predictions[i][log_var_slice].unsqueeze(0)), dim=1)
                             errors[state_key][delta_t * prediction_size].append(
                                 log_prob(
-                                    predicted_states[i][state_range].unsqueeze(0),
-                                    states[i+delta_t][state_range].unsqueeze(0)
-                                )
+                                    states[i+delta_t][state_range].unsqueeze(0),
+                                    output
+                                ).cpu().numpy()
                             )
-                        elif log_prob_error and not is_probabilistic:
+                        elif log_prob_error and not is_probabilistic and mean_errors is not None:
                             errors[state_key][delta_t * prediction_size].append(
                                 log_gaussian_prob(
-                                    predicted_states[i][state_range].unsqueeze(0),
-                                    states[i+delta_t][state_range].unsqueeze(0)
-                                )
+                                    states[i+delta_t][state_range].unsqueeze(0),
+                                    predictions[i][state_range].unsqueeze(0),
+                                    mean_errors[delta_t]
+                                ).cpu().numpy()
                             )
                         else:
                             errors[state_key][delta_t * prediction_size].append(
                                 euclidean_distance(
-                                    predicted_states[i][state_range].cpu().numpy(),
+                                    predictions[i][state_range].cpu().numpy(),
                                     states[i+delta_t][state_range].cpu().numpy()
                                 )
                             )
@@ -123,7 +134,11 @@ def get_eval_data(
         medians = np.full(len(eval_data[model_name]['steps']), np.nan)
         quantiles_25 = np.full(len(eval_data[model_name]['steps']), np.nan)
         quantiles_75 = np.full(len(eval_data[model_name]['steps']), np.nan)
+        mean_errors = {}
         for index, (step, error) in enumerate(errors[state_key].items()):
+            if log_prob_error and not is_probabilistic:
+                # get mean mse at step t
+                mean_errors[step] = np.mean(error)
             medians[index] = np.median(error)
             quantiles_25[index] = np.quantile(error, 0.25)
             quantiles_75[index] = np.quantile(error, 0.75)
@@ -141,18 +156,20 @@ def get_eval_data(
         with open(str(save_file), 'wb') as file:
             pickle.dump(eval_data, file)
 
-    return eval_data
+    return eval_data, mean_errors
 
 
 if __name__ == "__main__":
     # prediction_size = 5
-    plot_save_path = "plots/mlp_log_prob_error_by_steps.png"
+    # plot_save_path = "plots/mlp_log_prob_error_by_steps.png"
+    plot_save_path = "plots/prob_mlp_log_prob_error_by_steps.png"
     models = {
         # model_name: model_config_file_path
-        "mlp": 'models/MLP256_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
-        # "5_step_linear_1024": (MLP1024, 'models/5_step_linear_model_1024.pth'),
+        # "mlp": 'models/MLP256_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        "prob_mlp": 'models/ProbMLP_pred_size=1_constrained=False_delta=False_lr0.001_bs128 (1).pkl',
     }
     log_prob_error = True
+    max_steps = 50
 
     # Load test dataset from file
     test_df = load_test_dataset()
@@ -165,9 +182,9 @@ if __name__ == "__main__":
         model_cfg = (globals()[model_config['model']], model_config['model_params'], model_config['predict_delta'])
         prediction_size = model_config['prediction_size']
         constrain_output = model_config['constrain_output']
-        eval_save_file = Path("eval_data") / f"{model_name}_log_prob_eval_data.pkl"
-        # eval_save_file = None
-        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=50, log_prob_error=log_prob_error)
+        eval_save_file = Path("eval_data") / f"{model_name}_log_prob_eval_data_test.pkl"
+        _, mean_errors = get_eval_data(test_df, model_name, model_cfg, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=max_steps, log_prob_error=log_prob_error)
+        model_eval_data, _ = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=max_steps, log_prob_error=log_prob_error, mean_errors=mean_errors)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
