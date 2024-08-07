@@ -17,7 +17,17 @@ if __name__ == "__main__":
     models = {
         # model_name: model_config_file_path
         "mlp": 'models/MLP256_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        ## "delta_mlp": 'models/MLP256_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
         "rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        # "delta_rnn": 'models/RNN_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
+        # "constrained_mlp": 'models/MLP256_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        # "constrained_delta_mlp": 'models/MLP256_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
+        # "constrained_rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        # "constrained_delta_rnn": 'models/RNN_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
+        # "prob_mlp": 'models/MLP256_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        ## "delta_prob_mlp": 'models/MLP256_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
+        # "prob_rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        # "delta_prob_rnn": 'models/RNN_pred_size=1_constrained=False_delta=True_lr0.001_bs128.pkl',
     }
     log_prob_error = False
     max_steps = 20
@@ -40,8 +50,13 @@ if __name__ == "__main__":
         prediction_size = model_config['prediction_size']
         constrain_output = model_config['constrain_output']
         eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
-        
-        model_eval_data = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=max_steps, log_prob_error=log_prob_error)
+        # if model_name.split("_")[-1] == "mlp":
+        #     model_eval_data, _ = get_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=max_steps, log_prob_error=log_prob_error)
+        # else:
+        #     model_eval_data, _ = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output,  max_steps=max_steps, log_prob_error=log_prob_error)
+        with open(str(eval_save_file), 'rb') as file:
+            model_eval_data = pickle.load(file)
+
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 1, figsize=(12, 6))

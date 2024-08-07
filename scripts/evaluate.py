@@ -39,7 +39,7 @@ def get_eval_data(
     """
     if save_file is not None and save_file.exists():
         with open(str(save_file), 'rb') as file:
-            return pickle.load(file)
+            return pickle.load(file), None
 
     # Initialize data structures to store evaluation data
     eval_data = {}
@@ -60,9 +60,6 @@ def get_eval_data(
 
     with torch.no_grad():
         for trajectory_idx, trajectory in enumerate(test_df['Trajectory']):
-            # TESTING
-            if trajectory_idx > 1:
-                break
 
             # Create multistep predictions for each trajectory in test dataset
             final_state_index = len(trajectory)
@@ -89,7 +86,7 @@ def get_eval_data(
                 else:
                     predicted_states = predictions
                 if constrain_output:
-                    predictions = apply_constraints(predictions, state_actions)
+                    predicted_states = apply_constraints(predicted_states, state_actions)
                 predictions = predictions[0:final_state_index - delta_t]
                 predicted_states = predicted_states[0:final_state_index - delta_t]
                 state_actions = torch.concat((predicted_states, state_actions[0:final_state_index-delta_t,output_size:input_size]), dim=1).to('cuda')
