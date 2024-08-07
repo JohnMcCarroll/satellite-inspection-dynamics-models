@@ -14,6 +14,7 @@ from typing import Optional
 from pathlib import Path
 from constants import NAMED_STATE_RANGES
 import pandas as pd
+from utils import log_prob, log_gaussian_prob
 
 
 # Calculate error between model output and target vector
@@ -38,13 +39,15 @@ def get_rnn_eval_data(
         validation: bool = False,
         batch_size: int = 128,
         constrain_output: bool = False,
+        log_prob_error: bool = False,
+        mean_errors: dict = None
     ):
     """
     Collects multistep prediction error of given model or loads evaluation data from file.
     """
     if save_file is not None and save_file.exists():
         with open(str(save_file), 'rb') as file:
-            return pickle.load(file)
+            return pickle.load(file), None
 
     # Initialize data structures to store evaluation data
     eval_data = {}
@@ -66,6 +69,9 @@ def get_rnn_eval_data(
 
     with torch.no_grad():
         for j in range(0, len(test_df), batch_size):
+            ### TEST
+            if j >= batch_size:
+                break
             if j+batch_size in test_df.index:
                 batch = test_df.iloc[j:j+batch_size]
             else:
@@ -103,10 +109,12 @@ def get_rnn_eval_data(
                     # Create multivariate normal distributions
                     mvn = torch.distributions.Normal(loc=means, scale=std_devs)
                     # Sample from each distribution
-                    output = mvn.sample()
+                    predicted_states = mvn.sample()
+                else:
+                    predicted_states = output
 
                 if constrain_output:
-                    output = apply_constraints(output.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
+                    predicted_states = apply_constraints(predicted_states.view(-1,output_size), state_action[mask].view(-1,input_size)).view(-1, 1, output_size)
 
                 multistep_predictions[(i,i+prediction_size)] = output
                 target_states[(i,i+prediction_size)] = target_output[mask]
@@ -126,7 +134,7 @@ def get_rnn_eval_data(
                             multistep_target_output = multistep_target_outputs[:,k+i+prediction_size:k+i+prediction_size+1,:]
                             # Handle NaNs
                             multistep_mask = ~torch.isnan(multistep_target_output)[:,0,0]
-                            state_action = torch.concatenate((output[multistep_mask],multistep_actions[multistep_mask,k+i+prediction_size:k+i+prediction_size+1,:]), dim=2)
+                            state_action = torch.concatenate((predicted_states[multistep_mask],multistep_actions[multistep_mask,k+i+prediction_size:k+i+prediction_size+1,:]), dim=2)
                             # Forward pass
                             output, multistep_prediction_hidden_state = model(state_action, multistep_prediction_hidden_state[:,multistep_mask,:])
 
@@ -139,7 +147,9 @@ def get_rnn_eval_data(
                                 # Create multivariate normal distributions
                                 mvn = torch.distributions.Normal(loc=means, scale=std_devs)
                                 # Sample from each distribution
-                                output = mvn.sample()
+                                predicted_states = mvn.sample()
+                            else:
+                                predicted_states = output
 
                             if constrain_output:
                                 output = apply_constraints(output.view(-1,output_size), state_action.view(-1,input_size)).view(-1, 1, output_size)
@@ -155,18 +165,36 @@ def get_rnn_eval_data(
                             break
 
             # Compute and store error
-            for key, predicted_states in multistep_predictions.items():
-                for l in range(predicted_states.shape[0]):
+            for key, predictions in multistep_predictions.items():
+                for l in range(predictions.shape[0]):
                     actual_state = target_states[key][l]
-                    predicted_state = predicted_states[l]
+                    predicted_state = predictions[l]
                     num_steps = key[1] - key[0]
                     for state_key, state_range in NAMED_STATE_RANGES.items():
-                        errors[state_key][num_steps].append(
-                            euclidean_distance(
-                                predicted_state[0][state_range].cpu().numpy(),
-                                actual_state[0][state_range].cpu().numpy()
+                        if log_prob_error and is_probabilistic:
+                            log_var_slice = slice(state_range.start + 12, state_range.stop + 12)
+                            output = torch.concat((predicted_state[0][state_range], predicted_state[0][log_var_slice])).unsqueeze(0)
+                            errors[state_key][num_steps].append(
+                                log_prob(
+                                    actual_state[0][state_range],
+                                    output
+                                ).cpu().numpy()
                             )
-                        )
+                        elif log_prob_error and not is_probabilistic and mean_errors is not None:
+                            errors[state_key][num_steps].append(
+                                log_gaussian_prob(
+                                    actual_state[0][state_range],
+                                    predicted_state[0][state_range],
+                                    mean_errors[num_steps]
+                                ).cpu().numpy()
+                            )
+                        else:
+                            errors[state_key][num_steps].append(
+                                euclidean_distance(
+                                    predicted_state[0][state_range].cpu().numpy(),
+                                    actual_state[0][state_range].cpu().numpy()
+                                )
+                            )
 
         # Calculate summary statistics of different slices of the data
         eval_data[model_name] = {"steps": np.arange(prediction_size, max_steps + 1, prediction_size)}
@@ -174,7 +202,11 @@ def get_rnn_eval_data(
             medians = np.full(len(eval_data[model_name]['steps']), np.nan)
             quantiles_25 = np.full(len(eval_data[model_name]['steps']), np.nan)
             quantiles_75 = np.full(len(eval_data[model_name]['steps']), np.nan)
+            mean_errors = {}
             for index, (step, error) in enumerate(errors[state_key].items()):
+                if log_prob_error and not is_probabilistic:
+                    # get mean mse at step t
+                    mean_errors[step] = np.mean(error)
                 medians[index] = np.median(error)
                 quantiles_25[index] = np.quantile(error, 0.25)
                 quantiles_75[index] = np.quantile(error, 0.75)
@@ -192,21 +224,22 @@ def get_rnn_eval_data(
             with open(str(save_file), 'wb') as file:
                 pickle.dump(eval_data, file)
 
-        return eval_data
+        return eval_data, mean_errors
 
 
 if __name__ == "__main__":
     # Configure Evaluation
-    plot_save_path = "plots/rnn_error_by_steps.png"
+    # plot_save_path = "plots/rnn_error_by_steps.png"
+    plot_save_path = "plots/prob_rnn_log_prob_error_by_steps.png"
+    plot_save_path = "plots/rnn_log_prob_error_by_steps.png"
     models = {
         # model_name: model_config_file_path
+        # "rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
+        "prob_rnn": 'models/ProbRNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
         "rnn": 'models/RNN_pred_size=1_constrained=False_delta=False_lr0.001_bs128.pkl',
-        # "linear_1024": (MLP1024, 'models/linear_model_1024.pth'),
     }
-    # input_size = 15
-    # output_size = 12
-    # eval_data = copy.deepcopy(models)
-    # eval_name = "LinearModelSize"
+    log_prob_error = True
+    max_steps = 10
 
     # Load test dataset from file
     test_df = load_test_dataset()
@@ -220,8 +253,9 @@ if __name__ == "__main__":
         model_cfg = (globals()[model_config['model']], model_config['model_params'], model_config['predict_delta'])
         prediction_size = model_config['prediction_size']
         constrain_output = model_config['constrain_output']
-        eval_save_file = Path("eval_data") / f"{model_name}_eval_data.pkl"
-        model_eval_data = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output, max_steps=20)
+        eval_save_file = Path("eval_data") / f"{model_name}_log_prob_eval_data_test.pkl"
+        _, mean_errors = get_rnn_eval_data(test_df, model_name, model_cfg, prediction_size=prediction_size, constrain_output=constrain_output, max_steps=max_steps, log_prob_error=log_prob_error)
+        model_eval_data, _ = get_rnn_eval_data(test_df, model_name, model_cfg, save_file=eval_save_file, prediction_size=prediction_size, constrain_output=constrain_output, max_steps=max_steps, log_prob_error=log_prob_error, mean_errors=mean_errors)
         eval_data = eval_data | model_eval_data
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
