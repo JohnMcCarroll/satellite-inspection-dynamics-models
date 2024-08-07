@@ -69,9 +69,6 @@ def get_rnn_eval_data(
 
     with torch.no_grad():
         for j in range(0, len(test_df), batch_size):
-            ### TEST
-            if j >= batch_size:
-                break
             if j+batch_size in test_df.index:
                 batch = test_df.iloc[j:j+batch_size]
             else:
